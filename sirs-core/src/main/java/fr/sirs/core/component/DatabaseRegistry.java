@@ -18,6 +18,8 @@
  */
 package fr.sirs.core.component;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -27,30 +29,40 @@ import static fr.sirs.core.SirsCore.INFO_DOCUMENT_ID;
 import fr.sirs.core.SirsCoreRuntimeException;
 import fr.sirs.core.SirsDBInfo;
 import fr.sirs.core.authentication.AuthenticationWallet;
+import fr.sirs.core.authentication.SIRSAuthenticator;
+import fr.sirs.couchdb2.Couchdb2ReplicationTask;
 import fr.sirs.index.ElasticSearchEngine;
+import fr.sirs.util.ClosingDaemon;
 import fr.sirs.util.property.SirsPreferences;
 import static fr.sirs.util.property.SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR;
+import static fr.sirs.util.property.SirsPreferences.PROPERTIES.NODE_NAME;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.ProxySelector;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Spliterator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -69,10 +81,10 @@ import org.ektorp.http.HttpResponse;
 import org.ektorp.http.PreemptiveAuthRequestInterceptor;
 import org.ektorp.http.RestTemplate;
 import org.ektorp.http.StdHttpClient;
-import org.ektorp.impl.StdCouchDbInstance;
-import org.ektorp.impl.StdReplicationTask;
+import org.ektorp.impl.StdCouchDb2Instance;
 import org.ektorp.support.CouchDbRepositorySupport;
 import org.ektorp.support.Filter;
+import org.ektorp.util.Exceptions;
 import org.geotoolkit.gui.javafx.util.TaskManager;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -80,6 +92,14 @@ import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 /**
  * Create a wrapper for connections on a CouchDb service.
+ *
+ * Warning in order to avoid repetitive authentication, logins are saved by
+ * {@link AuthenticationWallet} and {@link SIRSAuthenticator} in a authWallet.json
+ * file.
+ * In order to allow the backup of a valid authentication, this class is
+ * responsible for alerting the {@link SIRSAuthenticator} class of successful
+ * requests by calling {@link SIRSAuthenticator#validEntry(java.net.URL)} with
+ * the requested Url.
  *
  * @author Olivier Nouguier (Geomatys)
  * @author Alexis Manin (Geomatys)
@@ -133,6 +153,14 @@ public class DatabaseRegistry {
 
     /** Check if a given string is a database URL (i.e not a path / url). */
     private static final Pattern DB_NAME = Pattern.compile("^[a-z][\\w-]+/?");
+
+    /**
+     * Détection des départs d'URLs éventuellement suivis de paramètres d'authentification sur l'hôte
+     *
+     * Exemples :
+     * http://localhost:5984
+     * http://user:password@localhost:5984
+     */
     private static final Pattern URL_START = Pattern.compile("(?i)^[A-Za-z]+://([^@]+@)?");
     /** Check if given string is an URL to local host. */
     private static final Pattern LOCALHOST_URL = Pattern.compile("(?i)^([A-Za-z]+://)?([^@]+@)?(localhost|127\\.0\\.0\\.1)(:\\d+)?");
@@ -222,6 +250,7 @@ public class DatabaseRegistry {
         if (username != null && isLocal) {
             try {
                 createUserIfNotExists(couchDbUrl, username, userPass);
+                SIRSAuthenticator.validEntry(couchDbUrl);
             } catch (Exception e) {
                 // normal behavior if authentication is required.
                 SirsCore.LOGGER.log(Level.FINE, "User check / creation failed.", e);
@@ -248,6 +277,15 @@ public class DatabaseRegistry {
             hostPattern = Pattern.compile("(?i)^([A-Za-z]+://)?([^@]+@)?(localhost|127\\.0\\.0\\.1)(:"+portToUse+")?");
         } else {
             hostPattern = Pattern.compile("(?i)^([A-Za-z]+://)?([^@]+@)?"+couchDbUrl.getHost()+"(:"+portToUse+")?");
+        }
+    }
+
+    public CouchSGBD getSGBDInfo(){
+        if(couchDbInstance!=null){
+        return ((StdCouchDb2Instance) couchDbInstance).getSGBDInfo();
+        }
+        else {
+            throw new IllegalStateException("aucune instance de CouchDB n'est connectée");
         }
     }
 
@@ -282,18 +320,6 @@ public class DatabaseRegistry {
      */
     private void connect() throws IOException {
         final AuthenticationWallet wallet = AuthenticationWallet.getDefault();
-        /*
-         * First, we will open a connection with a java.net url to initialize authentication.
-         */
-        try (final InputStream stream = couchDbUrl.openStream()) {
-            if (wallet != null) {
-                AuthenticationWallet.Entry authEntry = wallet.get(couchDbUrl);
-                if (authEntry != null) {
-                    username = authEntry.login;
-                    userPass = authEntry.password;
-                }
-            }
-        }
 
         // Configure http client
         final StdHttpClient.Builder builder = new SirsClientBuilder()
@@ -304,8 +330,24 @@ public class DatabaseRegistry {
                 .socketTimeout(SOCKET_TIMEOUT)
                 .relaxedSSLSettings(true);
 
-        couchDbInstance = new StdCouchDbInstance(builder.build());
-        couchDbInstance.getAllDatabases();
+
+               boolean unPassed=true;
+               byte attempt =0;
+        while(unPassed) {
+            try {
+                couchDbInstance = new StdCouchDb2Instance(builder.build(), SirsPreferences.INSTANCE.getProperty(NODE_NAME));
+                couchDbInstance.getAllDatabases();
+                //Si cette ligne est exécutée, cela signifie que la requête provoquée par getAllDatabases()
+                //a réussie. On demande alors à la classe SIRSAuthenticator.java de sauvegarder les identifiants de connection utilisés.
+                SIRSAuthenticator.validEntry(couchDbUrl);
+                unPassed = false;
+            } catch (DbAccessException dbexc) {
+                if (++attempt==(byte)3){
+                    throw Exceptions.propagate(dbexc);
+                }
+
+            }
+        }
     }
 
     /**
@@ -314,7 +356,7 @@ public class DatabaseRegistry {
      */
     public List<String> listSirsDatabases() {
         final List<String> dbList = couchDbInstance.getAllDatabases();
-
+        SIRSAuthenticator.validEntry(couchDbUrl);
         List<String> res = new ArrayList<>();
         for (String db : dbList) {
             if (db.startsWith("_"))
@@ -361,13 +403,20 @@ public class DatabaseRegistry {
             changeEmiter.start();
         }
         if (initIndex) {
+            if (username == null) {  //Si aucun utilisateur n'est identifié, on vérifie qu'il n'a pas était créé depuis instanciation.
+                AuthenticationWallet.Entry entry = AuthenticationWallet.getDefault().get(couchDbUrl);
+                if (entry != null && entry.login != null) {
+                    username = entry.login;
+                    userPass = entry.password;
+                }
+            }
             ElasticSearchEngine elasticEngine = new ElasticSearchEngine(
                     couchDbUrl.getHost(), (couchDbUrl.getPort() < 0) ? 5984 : couchDbUrl.getPort(), connector.getDatabaseName(), username, userPass);
             parentFactory.registerSingleton(ElasticSearchEngine.class.getSimpleName(), elasticEngine);
         }
 
         parentFactory.registerSingleton(DatabaseRegistry.class.getSimpleName(), this);
-        
+
         return new ClassPathXmlApplicationContext(new String[]{SirsCore.SPRING_CONTEXT}, parentContext);
     }
 
@@ -404,26 +453,30 @@ public class DatabaseRegistry {
      * wait any longer. In that case, the error is caught silently, allowing client
      * to go further while replication keep going.
      *
-     * @param distant The source database name if it's in current service, complete URL otherwise.
-     * @param local Name of target database. It have to be in current service.
+     * @param remoteDb The source database name if it's in current service, complete URL otherwise.
+     * @param localDb Name of target database. It have to be in current service.
      * @param continuous True if we must keep databases synchronized over time. False for one shot synchronization.
+     * @return Information about all initiated replications. Can be empty, but never null.
      * @throws IOException If an error occurs while trying to connect to one database.
      * @throws IllegalArgumentException If databases are incompatible (different SRID, or distant bdd is not a SIRS one).
      * @throws DbAccessException If an error occcurs during replication.
      */
-    public void synchronizeSirsDatabases(String distant, final String local, boolean continuous) throws IOException {
-        Optional<SirsDBInfo> distantInfo = getInfo(distant);
+    public List<ReplicationStatus> synchronizeSirsDatabases(final String remoteDb, final String localDb, boolean continuous) throws IOException {
+        Optional<SirsDBInfo> distantInfo = getInfo(remoteDb);
         if (!distantInfo.isPresent()) {
             throw new IllegalArgumentException(new StringBuilder("Impossible de trouver une base de données à l'adresse suivante : ")
-                    .append(distant).append(".").append(System.lineSeparator())
+                    .append(remoteDb).append(".").append(System.lineSeparator())
                     .append("Vérifier l'hôte, le port, et le nom de la base de données dans l'adresse entrée.").toString());
         }
 
-        final CouchDbConnector localConnector = createConnector(local, DatabaseConnectionBehavior.CREATE_IF_NOT_EXISTS);
+        final String distantNoAuth = removeAuthenticationInformation(remoteDb);
+        final CouchDbConnector localConnector = createConnector(localDb, DatabaseConnectionBehavior.CREATE_IF_NOT_EXISTS);
         Optional<SirsDBInfo> info = getInfo(localConnector);
+        boolean sameDistant = false;
         if (info.isPresent()) {
             SirsDBInfo localInfo = info.get();
-            if (localInfo.getRemoteDatabase() != null && !localInfo.getRemoteDatabase().equals(distant)) {
+            sameDistant = remoteDb.equals(localInfo.getRemoteDatabase()) || distantNoAuth.equals(localInfo.getRemoteDatabase());
+            if (localInfo.getRemoteDatabase() != null && !sameDistant) {
                 final TaskManager.MockTask<Optional<ButtonType>> confirmation = new TaskManager.MockTask<>(() -> {
                     final Alert alert = new Alert(
                             Alert.AlertType.WARNING,
@@ -448,29 +501,41 @@ public class DatabaseRegistry {
                 if (showAndWait.isPresent() && showAndWait.get().equals(ButtonType.OK)) {
                     cancelAllSynchronizations(localConnector.getDatabaseName());
                 } else {
-                    return;
+                    return Collections.EMPTY_LIST;
                 }
             }
         }
 
         // Force authentication on distant database. We can rely on wallet information
         // because a connection should have been opened already to retrieve SIRS information.
-        distant = addAuthenticationInformation(distant);
+        final String remoteAuthDb = addAuthenticationInformation(remoteDb);
+        final String localAuthDb = addAuthenticationInformation(localDb);
 
+        final List<ReplicationStatus> result = new ArrayList<>(2);
         try {
-            copyDatabase(distant, local, continuous);
+            final ReplicationStatus status = copyDatabase(remoteAuthDb, localAuthDb, continuous);
+            if (status != null) {
+                result.add(status);
+            }
         } catch (DbAccessException e) {
-            checkReplicationError(e, distant, local);
+            checkReplicationError(e, remoteAuthDb, localAuthDb);
         }
 
         try {
-            copyDatabase(local, distant, continuous);
+            final ReplicationStatus status = copyDatabase(localAuthDb, remoteAuthDb, continuous);
+            if (status != null) {
+                result.add(status);
+            }
         } catch (DbAccessException e) {
-            checkReplicationError(e, local, distant);
+            checkReplicationError(e, localAuthDb, remoteAuthDb);
         }
 
         // Update local database information : remote db.
-        new SirsDBInfoRepository(localConnector).setRemoteDatabase(removeAuthenticationInformation(distant));
+        if (!sameDistant) {
+            new SirsDBInfoRepository(localConnector).setRemoteDatabase(distantNoAuth);
+        }
+
+        return Collections.unmodifiableList(result);
     }
 
     /**
@@ -489,7 +554,7 @@ public class DatabaseRegistry {
         final String tmpSource = cleanDatabaseName(sourceDb);
         final String tmpTarget = cleanDatabaseName(targetDb);
         try {
-            count = getReplicationTasks().stream()
+            count = getReplicationTasks()
                     .filter(status -> {
                         return cleanDatabaseName(status.getSourceDatabaseName()).equals(tmpSource)
                                 && cleanDatabaseName(status.getTargetDatabaseName()).equals(tmpTarget);
@@ -503,7 +568,7 @@ public class DatabaseRegistry {
         if (count < 1) {
             throw e;
         } else {
-            SirsCore.LOGGER.log(Level.FINE, e, () -> new StringBuilder("An error occured during a replication from ").append(sourceDb).append(" to ").append(targetDb).toString());
+            SirsCore.LOGGER.log(Level.FINE, e, () -> String.format("An error occured during a replication from %s to %s", sourceDb, targetDb));
         }
     }
 
@@ -511,27 +576,14 @@ public class DatabaseRegistry {
      * Retrieve list of continuous synchronization tasks the input database is part of. Even
      * paused tasks are returned.
      *
-     * @param dbName Target database name or path for synchronizations.
+     * @param dbUrl Url de la base à synchroniser
      * @return List of source database names or path for continuous copies on input database.
      * @throws java.io.IOException If we cannot get list of active synchronisation from CouchDB.
      */
-    public Stream<ReplicationTask> getSynchronizationTasks(final String dbName) throws IOException {
-        ArgumentChecks.ensureNonEmpty("Input database name", dbName);
-        return getReplicationTasksBySourceOrTarget(dbName)
+    public Stream<ReplicationTask> getSynchronizationTasks(final String dbUrl) throws IOException {
+        ArgumentChecks.ensureNonEmpty("Input database name", dbUrl);
+        return getReplicationTasksBySourceOrTarget(dbUrl)
                 .filter((ReplicationTask task)-> task.isContinuous());
-    }
-
-    /**
-     * Copy source database content to destination database. If destination database
-     * does not exists, it will be created. No synchronization over time here.
-     *
-     * @param dbToCopy Database to copy. Only its name if it's in current service, complete URL otherwise.
-     * @param dbToPasteInto Database to paste content into. Only its name if it's in current service, complete URL otherwise.
-     * @return A status of started replication task.
-     * @throws java.io.IOException If an error occurs while connecting to one of the databases.
-     */
-    public ReplicationStatus copyDatabase(final String dbToCopy, final String dbToPasteInto) throws IOException {
-        return copyDatabase(dbToCopy, dbToPasteInto, false);
     }
 
     /**
@@ -542,32 +594,25 @@ public class DatabaseRegistry {
      * be copied. However, if given databases both exist, it will be analyzed to
      * ensure databases are compatibles (same srid, application / modules versions, etc.)
      *
-     * @param dbToCopy Database to copy. Only its name if it's in current service, complete URL otherwise.
-     * @param dbToPasteInto Database to paste content into. Only its name if it's in current service, complete URL otherwise.
+     * @param sourceDb url complète de la base source de la copie, incluant les paramètres d'authentification
+     * @param targetDb url complète de la base cible de la copie, incluant les paramètres d'authentification
      * @param continuous If true, target database will continuously retrieve changes happening in source database. If not, it's one shot copy.
-     * @return A status of started replication task.
+     * @return A status of started replication task. Can be null if we failed
+     * getting it from the server, but the replication looks like it's going fine.
      * @throws java.io.IOException If an error occurs while connecting to the databases.
      */
-    public ReplicationStatus copyDatabase(String dbToCopy, String dbToPasteInto, final boolean continuous) throws IOException {
+    public ReplicationStatus copyDatabase(final String sourceDb, final String targetDb, final boolean continuous) throws IOException {
+
         // Ensure database to copy is valid.
-        final CouchDbConnector srcConnector = createConnector(dbToCopy, DatabaseConnectionBehavior.FAIL_IF_NOT_EXISTS);
+        final CouchDbConnector srcConnector = createConnector(sourceDb, DatabaseConnectionBehavior.FAIL_IF_NOT_EXISTS);
         Optional<SirsDBInfo> info = getInfo(srcConnector);
-        // If database to copy is a distant one, we have to add authentication information, or CouchDB won't be able to replicate any data.
-        if (!isLocal(dbToCopy)) {
-            dbToCopy = addAuthenticationInformation(dbToCopy);
-        }
-        final String toCopyNoAuth = cleanDatabaseName(dbToCopy);
 
         /* Check if target database exists/ can be created, and if we have to
          * add authentication information. We don't create database now. We'll
          * do it later, reducing chances of keeping an empty database if an
          * error occurs.
          */
-        final CouchDbConnector dstConnector = createConnector(dbToPasteInto, DatabaseConnectionBehavior.DEFAULT);
-        if (!isLocal(dbToPasteInto)) {
-            dbToPasteInto = addAuthenticationInformation(dbToPasteInto);
-        }
-        final String targetNoAuth = cleanDatabaseName(dbToPasteInto);
+        final CouchDbConnector tgtConnector = createConnector(targetDb, DatabaseConnectionBehavior.DEFAULT);
 
         // If no info is found, the database is not a SIRS db. We cannot make any analysis.
         Map<String, ModuleDescription> modules = null;
@@ -575,16 +620,15 @@ public class DatabaseRegistry {
         if (info.isPresent()) {
             final SirsDBInfo srcInfo = info.get();
             final String srcSRID = srcInfo.getEpsgCode();
-            info = getInfo(dstConnector);
+            info = getInfo(tgtConnector);
+
             if (info.isPresent()) {
                 final SirsDBInfo dstInfo = info.get();
                 final String dstSRID = dstInfo.getEpsgCode();
                 if (srcSRID == null ? dstSRID != null : !srcSRID.equals(dstSRID)) {
-                    final StringBuilder builder = new StringBuilder("Impossible de synchroniser les bases de données car elles n'utilisent pas le même système de projection :");
-                    builder.append(System.lineSeparator())
-                            .append(toCopyNoAuth).append(" : ").append(srcSRID).append(System.lineSeparator())
-                            .append(targetNoAuth).append(" : ").append(dstSRID);
-                    throw new IllegalArgumentException(builder.toString());
+                    throw new IllegalArgumentException(String.format(Locale.FRANCE,
+                            "Impossible de synchroniser les bases de données car elles n'utilisent pas le même système de projection : (%s : %s) => (%s : %s)",
+                            cleanDatabaseName(sourceDb), srcSRID, cleanDatabaseName(targetDb), dstSRID));
                 }
 
                 final Map<String, ModuleDescription> srcModules = srcInfo.getModuleDescriptions();
@@ -593,37 +637,41 @@ public class DatabaseRegistry {
 
                 if (dstModules == null && srcModules != null) {
                     modules = srcModules;
-                } else if (srcModules != null && dstModules != null) {
-                    final StringBuilder moduleError = new StringBuilder("Les bases de données ne peuvent être synchronisées, car elles travaillent avec des versions différentes des modules suivants : ");
+                }
+                else if (srcModules != null && dstModules != null) {
+
+                    final StringBuilder moduleError = new StringBuilder("Les bases de données ne peuvent être synchronisées"
+                            + " car elles travaillent avec des versions différentes des modules suivants : ");
                     boolean throwException = false;
                     /* We compare databases modules (it includes core comparison).
                      Also, as $sirs will not be copied, but we have to merge
                      module descriptions, we make an union of the two databases.
                      */
-                    ModuleDescription desc;
                     for (final Map.Entry<String, ModuleDescription> entry : srcModules.entrySet()) {
-                        desc = dstModules.get(entry.getKey());
+                        final ModuleDescription desc = dstModules.get(entry.getKey());
                         if (desc == null) {
                             dstModules.put(entry.getKey(), entry.getValue());
-                        } else if (!desc.getVersion().equals(entry.getValue().getVersion())) {
+                        }
+                        else if (!desc.getVersion().equals(entry.getValue().getVersion())) {
                             throwException = true;
                             moduleError.append(System.lineSeparator())
                                     .append(desc.title.get())
                                     .append(" : ")
                                     .append(desc.getVersion())
                                     .append(" (")
-                                    .append(targetNoAuth)
+                                    .append(cleanDatabaseName(targetDb))
                                     .append(") / ")
                                     .append(entry.getValue().getVersion())
                                     .append(" (")
-                                    .append(toCopyNoAuth)
-                                    .append(")");
+                                    .append(cleanDatabaseName(sourceDb))
+                                    .append(')');
                         }
                     }
 
                     if (throwException) {
                         throw new IllegalArgumentException(moduleError.toString());
-                    } else if (dstModuleListSize < dstModules.size()) {
+                    }
+                    else if (dstModuleListSize < dstModules.size()) {
                         // module description have changed, we must trigger its update.
                         modules = dstModules;
                     }
@@ -635,7 +683,7 @@ public class DatabaseRegistry {
 
         // We're now sure that replication can be launched (source exists, etc.).
         // We create destination if it does not exists yet, and proceed.
-        dstConnector.createDatabaseIfNotExists();
+        tgtConnector.createDatabaseIfNotExists();
 
         /*
          * If we're initiating a continuous copy, or the two databases already
@@ -649,16 +697,18 @@ public class DatabaseRegistry {
             new SirsFilterRepository(srcConnector);
 
             // Post required filter if it doesn't exist.
-            new SirsFilterRepository(dstConnector);
+            new SirsFilterRepository(tgtConnector);
 
             cmd = new ReplicationCommand.Builder()
-                    .continuous(continuous).source(dbToCopy).target(dbToPasteInto)
+                    .source(sourceDb).target(targetDb)
+                    .continuous(continuous)
                     .filter(SirsFilters.class.getSimpleName().concat("/").concat(SIRS_FILTER_NAME)) // Filter $sirs document.
-                    .createTarget(true).build();
+                    .build();
         } else {
             cmd = new ReplicationCommand.Builder()
-                    .continuous(continuous).source(dbToCopy).target(dbToPasteInto)
-                    .createTarget(true).build();
+                    .source(sourceDb).target(targetDb)
+                    .continuous(continuous)
+                    .build();
         }
 
         ReplicationStatus status = null;
@@ -666,14 +716,22 @@ public class DatabaseRegistry {
         while (status == null && remainingAttempt-- > 0) {
             try {
                 status = couchDbInstance.replicate(cmd);
+                // Si cette ligne est exécutée, cela signifie que la requête envoyée
+                // a réussie. On demande alors à la classe SIRSAuthenticator.java
+                // de sauvegarder les identifiants de connection utilisés.
+                SIRSAuthenticator.validEntry(couchDbUrl);
             } catch (DbAccessException e) {
-                checkReplicationError(e, dbToCopy, dbToPasteInto);
+                checkReplicationError(e, sourceDb, targetDb);
+                // If the error has not been thrown back, it means it was not
+                // related to a replication execution. It can be an exception
+                // related to status parsing failing, for example.
+                SirsCore.LOGGER.log(Level.WARNING, "An error happened while submitting replication", e);
             }
         }
 
         // update $sirs if the two databases didn't used the same modules.
         if (modules != null || sridToSet != null) {
-            final SirsDBInfoRepository infoRepo = new SirsDBInfoRepository(dstConnector);
+            final SirsDBInfoRepository infoRepo = new SirsDBInfoRepository(tgtConnector);
             if (modules != null) {
                 infoRepo.updateModuleDescriptions(modules);
             }
@@ -692,7 +750,9 @@ public class DatabaseRegistry {
      */
     public ReplicationStatus cancelCopy(final ReplicationStatus operationStatus) {
         return couchDbInstance.replicate(new ReplicationCommand.Builder()
-                .id(operationStatus.getId()).cancel(true).build());
+                .id(operationStatus.getId())
+                .cancel(true)
+                .build());
     }
 
     /**
@@ -703,9 +763,11 @@ public class DatabaseRegistry {
      */
     public int cancelAllSynchronizations(final String dbName) throws IOException {
         final AtomicInteger counter = new AtomicInteger(0);
-        ReplicationCommand.Builder cancel = new ReplicationCommand.Builder().cancel(true);
+        final ReplicationCommand.Builder cancel = new ReplicationCommand.Builder().cancel(true);
         getReplicationTasksBySourceOrTarget(dbName).forEach(task -> {
-            couchDbInstance.replicate(cancel.id(task.getReplicationId()).build());
+            couchDbInstance.replicate(cancel
+                    .id(task.getReplicationId())
+                    .build());
             counter.incrementAndGet();
         });
         return counter.get();
@@ -716,30 +778,84 @@ public class DatabaseRegistry {
      * @return All replications found on current CouchDb service.
      * @throws IOException If an error happens while connecting to couchdb, or while reading a replication status.
      */
-    ArrayList<ReplicationTask> getReplicationTasks() throws IOException {
+    public Stream<ReplicationTask> getReplicationTasks() throws IOException {
         HttpResponse httpResponse = couchDbInstance.getConnection().get("/_active_tasks");
-
-        final ArrayList<ReplicationTask> result = new ArrayList();
 
         final ObjectMapper mapper = new ObjectMapper();
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-        JsonNode tasks = mapper.readTree(httpResponse.getContent());
-        if (tasks.isArray()) {
-            Iterator<JsonNode> elements = tasks.elements();
-            while (elements.hasNext()) {
-                final JsonNode next = elements.next();
-                if (next.has("type") && "replication".equals(next.get("type").asText())) {
-                    result.add(mapper.treeToValue(next, StdReplicationTask.class));
-                }
-            }
-        }
 
-        return result;
+        final InputStream in = httpResponse.getContent();
+        final Stream<ReplicationTask> stream;
+        try {
+            final JsonParser parser = mapper.getFactory().createParser(in);
+            final JsonNode tasks = parser.readValueAsTree();
+
+            if (!tasks.isArray()) {
+                parser.close();
+                in.close();
+                return Stream.empty();
+            }
+
+            final Iterator<JsonNode> elements = tasks.elements();
+            Spliterator<ReplicationTask> spliterator = new Spliterator<ReplicationTask>() {
+
+                @Override
+                public boolean tryAdvance(Consumer<? super ReplicationTask> action) {
+                    while (elements.hasNext()) {
+                        final JsonNode next = elements.next();
+                        if (next.has("type") && "replication".equals(next.get("type").asText())) {
+                            try {
+                                action.accept(mapper.treeToValue(next, Couchdb2ReplicationTask.class));
+                            } catch (JsonProcessingException ex) {
+                                throw new UncheckedIOException(ex);
+                            }
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
+                @Override
+                public Spliterator<ReplicationTask> trySplit() {
+                    return null;
+                }
+
+                @Override
+                public long estimateSize() {
+                    return Long.MAX_VALUE;
+                }
+
+                @Override
+                public int characteristics() {
+                    return Spliterator.IMMUTABLE | Spliterator.DISTINCT | Spliterator.NONNULL;
+                }
+            };
+
+            stream = StreamSupport.stream(spliterator, false);
+            stream.onClose(() -> {
+                try {
+                    parser.close();
+                    in.close();
+                } catch (IOException ex) {
+                    SirsCore.LOGGER.log(Level.WARNING, "An http response stream cannot be closed.", ex);
+                }
+            });
+            ClosingDaemon.watchResource(stream, in);
+        } catch (Exception e) {
+            try {
+                in.close();
+            } catch (Exception bis) {
+                e.addSuppressed(bis);
+            }
+            throw e;
+        }
+        return stream;
     }
 
-    Stream<ReplicationTask> getReplicationTasksBySourceOrTarget(final String dst) throws IOException {
+    private Stream<ReplicationTask> getReplicationTasksBySourceOrTarget(final String dst) throws IOException {
         final String cleanedDst = cleanDatabaseName(dst);
-        return getReplicationTasks().stream().filter(
+        return getReplicationTasks().filter(
                 t -> (cleanDatabaseName(t.getSourceDatabaseName()).equals(cleanedDst)
                         || cleanDatabaseName(t.getTargetDatabaseName()).equals(cleanedDst)));
     }
@@ -768,7 +884,8 @@ public class DatabaseRegistry {
     private static void createUserIfNotExists(final URL couchDbUrl, final String username, final String password) throws IOException {
         RestTemplate template = new RestTemplate(new StdHttpClient.Builder().url(couchDbUrl).build());
 
-        final String adminConfig = "/_config/admins/" + username;
+        final String adminConfig = String.format("/_node/%s/_config/admins/%s",
+                SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.NODE_NAME), username);
         try {
             template.getUncached(adminConfig);
         } catch (Exception e) {
@@ -846,6 +963,7 @@ public class DatabaseRegistry {
         String authValue;
         try {
             authValue = couchDbInstance.getConfiguration(AUTH_SECTION, REQUIRE_USER_OPTION);
+            SIRSAuthenticator.validEntry(couchDbUrl);
         } catch (DbAccessException e) {
             authValue = null;
         }
@@ -954,7 +1072,7 @@ public class DatabaseRegistry {
      * @return Input string if no authentication information can be found. An URL
      * with basic authentication information otherwise.
      */
-    private static String addAuthenticationInformation(final String str) {
+    public static String addAuthenticationInformation(final String str) {
         // Force authentication on distant database. We can rely on wallet information
         // if a connection has already been opened to retrieve SIRS information.
         try {
@@ -970,6 +1088,9 @@ public class DatabaseRegistry {
                     }
                     return distantURL.toExternalForm().replaceFirst("(^\\w+://)", "$1" + userInfo);
                 }
+            }
+            else {
+                SirsCore.LOGGER.log(Level.FINE, "Les paramètres d'authentification sont déjà présents");
             }
         } catch (Exception e) {
             SirsCore.LOGGER.log(Level.FINE, "Cannot add authentication information", e);
@@ -1030,19 +1151,22 @@ public class DatabaseRegistry {
     public CouchDbConnector createConnector(final String dbNameOrPath, final DatabaseConnectionBehavior behavior) throws IOException, IllegalArgumentException {
         final boolean create = DatabaseConnectionBehavior.CREATE_IF_NOT_EXISTS.equals(behavior);
         final boolean fail = DatabaseConnectionBehavior.FAIL_IF_NOT_EXISTS.equals(behavior);
+
         if (DB_NAME.matcher(dbNameOrPath).matches()) {
             if (fail && !couchDbInstance.checkIfDbExists(dbNameOrPath)) {
-                throw new IllegalArgumentException(new StringBuilder("La base de donnée ").append(dbNameOrPath).append(" n'existe pas !").toString());
+                throw new IllegalArgumentException(String.format("La base de donnée %s n'existe pas !", dbNameOrPath));
             } else {
                 return couchDbInstance.createConnector(dbNameOrPath, create);
             }
-        } else {
+        }
+        else {
             final Matcher matcher = hostPattern.matcher(dbNameOrPath);
             if (matcher.find()) {
                 // An URL in current service has been given. We have to extract database path from it.
                 final String[] splittedPath = matcher.replaceAll("").split("/");
-                if (splittedPath.length < 1)
-                    throw new IllegalArgumentException("L'adresse donnée ne représente pas une base donnée valide :".concat(dbNameOrPath));
+                if (splittedPath.length < 1){
+                    throw new IllegalArgumentException(String.format("L'adresse donnée (%s) ne représente pas une base donnée valide.", dbNameOrPath));
+                }
                 int splitIndex = splittedPath.length;
                 final StringBuilder pathBuilder = new StringBuilder(splittedPath[--splitIndex]);
                 CouchDbConnector connector = null;
@@ -1055,9 +1179,9 @@ public class DatabaseRegistry {
                 }
 
                 if (connector == null) {
-                    throw new IllegalArgumentException("L'adresse donnée ne représente pas une base donnée valide :".concat(dbNameOrPath));
+                    throw new IllegalArgumentException(String.format("L'adresse donnée (%s) ne représente pas une base donnée valide.", dbNameOrPath));
                 } else if (fail && !couchDbInstance.checkIfDbExists(connector.getDatabaseName())) {
-                    throw new IllegalArgumentException(new StringBuilder("La base de donnée ").append(dbNameOrPath).append(" n'existe pas !").toString());
+                throw new IllegalArgumentException(String.format("La base de donnée %s n'existe pas !", dbNameOrPath));
                 } else {
                     return connector;
                 }
@@ -1107,7 +1231,13 @@ public class DatabaseRegistry {
      * @return Cut database name.
      */
     public static String cleanDatabaseName(final String sourceDbName) {
-        return URL_START.matcher(sourceDbName).replaceFirst("").replaceFirst("/$", "");
+        return URL_START.matcher(sourceDbName)
+                // suppression de la partie protocole + éventuelle authentification
+                .replaceFirst("")
+                // suppression de l'éventuel "/" de fin d'URL
+                .replaceFirst("/$", "")
+                // normalisation de la désignation de la boucle locale
+                .replaceAll("127.0.0.1", "localhost");
     }
 
     private static class SirsClientBuilder extends StdHttpClient.Builder {

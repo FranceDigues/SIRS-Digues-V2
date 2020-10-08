@@ -27,6 +27,7 @@ import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.event.ActionEvent;
 import javafx.event.Event;
@@ -53,7 +54,8 @@ public class FXFreeTab extends Tab implements FXTextAbregeable {
 
     private static final String UNBIND = "Détacher";
     private static final String BIND = "Rattacher";
-
+    
+    public ChangeListener<String> hack;
     /**
      * Last pane this tab has been bound to.
      */

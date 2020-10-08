@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -19,26 +19,23 @@
 package fr.sirs.plugin.berge.ui;
 
 import fr.sirs.Injector;
-import fr.sirs.SIRS;
 import fr.sirs.Session;
 import fr.sirs.core.model.AvecForeignParent;
 import fr.sirs.core.model.Berge;
-import fr.sirs.core.model.Preview;
-import fr.sirs.core.model.TronconDigue;
+import fr.sirs.core.model.Element;
 import fr.sirs.theme.AbstractTheme;
 import fr.sirs.theme.TronconTheme;
-import fr.sirs.theme.ui.FXTronconThemePane;
 import fr.sirs.theme.ui.ForeignParentPojoTable;
 import fr.sirs.util.SimpleFXEditMode;
 import fr.sirs.util.SirsStringConverter;
 import java.util.List;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.fxml.FXML;
 import javafx.scene.Parent;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Separator;
@@ -91,8 +88,8 @@ public class FXBergeThemePane extends BorderPane {
 
         private final TronconTheme.ThemeManager<T> group;
 
-        public BergeThemePojoTable(TronconTheme.ThemeManager<T> group) {
-            super(group.getDataClass(), group.getTableTitle());
+        public BergeThemePojoTable(TronconTheme.ThemeManager<T> group, final ObjectProperty<? extends Element> container) {
+            super(group.getDataClass(), group.getTableTitle(), container);
             foreignParentIdProperty.addListener(this::updateTable);
             this.group = group;
         }
@@ -112,7 +109,7 @@ public class FXBergeThemePane extends BorderPane {
                 setTableItems(() -> (ObservableList) group.getExtractor().apply(newValue));
             }
         }
-        
+
         public BooleanProperty getEditableProperty() {
             return editableProperty;
         }
@@ -125,7 +122,7 @@ public class FXBergeThemePane extends BorderPane {
         final HBox topPane = new HBox(separator, editMode);
         HBox.setHgrow(separator, Priority.ALWAYS);
 
-        final BergeThemePojoTable table = new BergeThemePojoTable(manager);
+        final BergeThemePojoTable table = new BergeThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
         table.setDeletor(manager.getDeletor());
         table.getEditableProperty().bind(editMode.editionState());
         table.foreignParentProperty().bindBidirectional(linearIdProperty);

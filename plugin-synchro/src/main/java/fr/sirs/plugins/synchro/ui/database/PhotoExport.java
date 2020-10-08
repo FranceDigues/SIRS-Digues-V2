@@ -201,20 +201,34 @@ public class PhotoExport extends StackPane implements TaskProvider {
     }
 
     private Stream<AbstractPhoto> find() {
+        final int limit = photoNumber.get();
+        if (limit < 1)
+            return Stream.empty();
+
         // Defensive copy. It also ensure that we've only distinct identifiers.
         final Set<String> tdIds = troncons.stream()
                 .map(Preview::getElementId)
                 .collect(Collectors.toSet());
 
+        UnaryOperator<Stream<AbstractPhoto>> preProcessor = stream
+                -> stream
+                        .filter(DocumentUtilities::isFileAvailable)
+                        .sorted(new DocumentExportPane.PhotoDateComparator());
+
+        if (limit < Integer.MAX_VALUE) {
+            final UnaryOperator<Stream<AbstractPhoto>> firstPreprocessor = preProcessor;
+            preProcessor = stream -> firstPreprocessor.apply(stream).limit(limit);
+        }
+
         final Stream<AbstractPhoto> photos = new PhotoFinder(session)
                 .setTronconIds(tdIds)
                 .setDocDateFilter(dateFilter)
-                .get();
+                .setPreProcessor(preProcessor)
+                .get()
+                .flatMap(photoTronconWrapper -> photoTronconWrapper.getPhotosStream());
 
         return photos
-                .filter(DocumentUtilities::isFileAvailable)
-                .sorted(new DocumentExportPane.PhotoDateComparator())
-                .limit(photoNumber.get());
+                .filter(DocumentUtilities::isFileAvailable);
     }
 
     private void estimateTaskUpdated(final ObservableValue obs, final Task<Long> oldValue, final Task<Long> newValue) {
@@ -231,7 +245,7 @@ public class PhotoExport extends StackPane implements TaskProvider {
                 SIRS.LOGGER.log(Level.WARNING, "Cannot estimate size for photographs to export.", newValue.getException());
                 Platform.runLater(() -> {
                     estimatedSize.set(-1);
-                    new Growl(Growl.Type.ERROR, "Impossible d'estimer la taille des photos poue envoi")
+                    new Growl(Growl.Type.ERROR, "Impossible d'estimer la taille des photos pour envoi")
                             .showAndFade();
                 });
             });

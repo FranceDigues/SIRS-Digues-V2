@@ -19,6 +19,7 @@
 package fr.sirs.core.model;
 
 import java.time.LocalDate;
+import java.util.function.Predicate;
 import javafx.beans.property.ObjectProperty;
 
 /**
@@ -40,4 +41,86 @@ public interface AvecBornesTemporelles {
     public LocalDate getDate_fin();
 
     public void setDate_fin(LocalDate date_fin);
+    
+    
+    /**
+     * Méthode d'archivage des tronçons de digue et des objets s'y référant dotés d'une validité temporelle (c'est à dire
+     * implémentant l'interface {@link AvecBornesTemporelles}).
+     *
+     * La procédure d'archivage consiste à affecter une date de fin au tronçon de digue et aux objets archivables qui s'y
+     * réfèrent, à condition qu'ils n'aient pas déjà une date de fin ou, éventuellement, que cette date de fin soit
+     * postérieure à la date d'archivage. Cette dernière condition doit être volontairement activée.
+     *
+     * ------
+     * On n'affecte une date de fin qu'aux objets qui n'en on pas déjà une SAUF si cette dernière est
+     * postérieure à la date d'archivage. Cette condition provient du code initial récupéré de la fusion de
+     * tronçons, avec une date d'archivage fixée à la veille de la date à laquelle est réalisée la fusion.
+     * Mais quelle est la raison pratique de cette condition… ? Difficile à dire.
+     *
+     * Afin de pouvoir paramétrer ce comportement, la condition de postériorité de la date doit donc être
+     * volontairement activée.
+     * 
+     */
+    public static final class ArchivePredicate implements Predicate<AvecBornesTemporelles> {
+
+        private final LocalDate forceAfter;
+
+        /**
+         * @param forceAfter Date à partir de laquelle on force la réinitialisation de la date d'archivage. Si nulle, on
+         * permet de n'archiver que les éléments non déjà archivés (ayant une date de fin nulle). Sinon, force en plus la
+         * réinitialisation de la date de fin aux éléments dont la date d'archivate est postérieure à cette date. 
+         * 
+         */
+        public ArchivePredicate(LocalDate forceAfter){
+            this.forceAfter = forceAfter;
+        }
+        
+        @Override
+        public boolean test(AvecBornesTemporelles input) {
+            final LocalDate endDate = input.getDate_fin();
+            return endDate == null || (forceAfter!=null && endDate.isAfter(forceAfter));
+        }
+    }
+    
+    /**
+     * 
+     */
+    public static final class UnArchivePredicate implements Predicate<AvecBornesTemporelles> {
+
+        private final LocalDate initialArchiveDate;
+
+        public UnArchivePredicate(LocalDate initialArchiveDate){
+            this.initialArchiveDate = initialArchiveDate;
+        }
+        
+        @Override
+        public boolean test(AvecBornesTemporelles dated) {
+            final LocalDate date = dated.getDate_fin();
+            return date != null && date.isEqual(initialArchiveDate);
+        }
+    }
+    
+    /**
+     * Condition de mise à jour des éléments archivés : leur date de fin doit être nulle (c'est à dire qu'ils ne doivent
+     * pas être archivés) ou égale à une date donnée.
+     * 
+     * Pour la mise à jour de l'archivage d'un tronçon avec les objets qui le référencent.
+     *
+     * D'après la demande explicite de Jordan Perrin (SYM-1444), les objets dont la date de fin est identique à l'ancienne
+     * date d'archivage du tronçon, voient alors leur nouvelle date de fin modifiée de manière à suivre celle du tronçon
+     * (voir commentaire du 22/05/2017 15:10).
+     */
+    public static final class UpdateArchivePredicate implements Predicate<AvecBornesTemporelles> {
+        
+        private final LocalDate oldArchiveDate;
+
+        public UpdateArchivePredicate(LocalDate oldArchiveDate){
+            this.oldArchiveDate = oldArchiveDate;
+        }
+        
+        @Override
+        public boolean test(AvecBornesTemporelles dated) {
+            return dated.getDate_fin()==null || dated.getDate_fin().isEqual(oldArchiveDate);
+        }
+    }
 }

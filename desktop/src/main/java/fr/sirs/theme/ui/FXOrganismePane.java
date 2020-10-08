@@ -21,9 +21,11 @@ package fr.sirs.theme.ui;
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
 import fr.sirs.core.model.ContactOrganisme;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.Organisme;
 import fr.sirs.util.DatePickerConverter;
 import java.time.LocalDate;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
@@ -74,7 +76,7 @@ public class FXOrganismePane extends AbstractFXElementPane<Organisme> {
             }
         }
 
-        contactOrganismeTable = new PojoTable(ContactOrganisme.class, "Contacts rattachés");
+        contactOrganismeTable = new PojoTable(ContactOrganisme.class, "Contacts rattachés", (ObjectProperty<Element>) null);
         contactOrganismeTable.parentElementProperty().bind(elementProperty);
         contactOrganismeTable.editableProperty().bind(disableFieldsProperty().not().and(elementProperty.isNotNull()));
         uiContactOrganismesTab.setContent(contactOrganismeTable);

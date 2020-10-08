@@ -21,9 +21,13 @@ package fr.sirs.core.component;
 import org.junit.Test;
 
 import fr.sirs.core.CouchDBTestCase;
+import fr.sirs.util.property.SirsPreferences;
 import java.io.IOException;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.sis.test.DependsOnMethod;
+import org.ektorp.ReplicationTask;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 
@@ -47,19 +51,24 @@ public class DatabaseRegistryTestCase extends CouchDBTestCase {
     @DependsOnMethod("databaseList")
     @Test
     public void initDatabaseFromRemote() throws IOException {
-        REGISTRY.synchronizeSirsDatabases(DB_NAME, REPLICATION_DEST, true);
+        REGISTRY.synchronizeSirsDatabases(
+                SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR) + DB_NAME, 
+                SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR) + REPLICATION_DEST, true);
     }
 
     @DependsOnMethod("initDatabaseFromRemote")
     @Test
-    public void getReplicationTasks() throws IOException {
-        Assert.assertFalse("No replication task found !", REGISTRY.getReplicationTasks().isEmpty());
+    public void getReplicationTasks() throws IOException, InterruptedException {
+        Thread.sleep(4000l);
+        Assert.assertTrue("No replication task found !", REGISTRY.getReplicationTasks().findAny().isPresent());
     }
 
     @DependsOnMethod("getReplicationTasks")
     @Test
-    public void getSynchronizationTask() throws IOException {
-        Assert.assertTrue(REGISTRY.getSynchronizationTasks(REPLICATION_DEST).count() > 0);
+    public void getSynchronizationTask() throws IOException, InterruptedException {
+        Thread.sleep(4000l);
+        final List<ReplicationTask> collect = REGISTRY.getSynchronizationTasks(SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR)+REPLICATION_DEST).collect(Collectors.toList());
+        Assert.assertEquals(2, collect.size());
     }
 
     @DependsOnMethod("getSynchronizationTask")
@@ -69,5 +78,18 @@ public class DatabaseRegistryTestCase extends CouchDBTestCase {
         Assert.assertFalse(
                 "Database list contains a deleted database !",
                 REGISTRY.listSirsDatabases().contains(REPLICATION_DEST));
+    }
+    
+    @Test
+    public void testCleanDatabaseName(){
+        Assert.assertEquals("toto",DatabaseRegistry.cleanDatabaseName("toto"));
+        Assert.assertEquals("localhost:5984/toto",DatabaseRegistry.cleanDatabaseName("http://localhost:5984/toto"));
+        Assert.assertEquals("localhost:5984/toto",DatabaseRegistry.cleanDatabaseName("http://localhost:5984/toto/"));
+        Assert.assertEquals("localhost:5984/toto",DatabaseRegistry.cleanDatabaseName("http://geouser:geopw@localhost:5984/toto"));
+        Assert.assertEquals("localhost:5984/toto",DatabaseRegistry.cleanDatabaseName("http://geouser:geopw@localhost:5984/toto/"));
+        Assert.assertEquals("france-digues.fr:5984/toto",DatabaseRegistry.cleanDatabaseName("http://france-digues.fr:5984/toto"));
+        Assert.assertEquals("france-digues.fr:5984/toto",DatabaseRegistry.cleanDatabaseName("http://france-digues.fr:5984/toto/"));
+        Assert.assertEquals("france-digues.fr:5984/toto",DatabaseRegistry.cleanDatabaseName("http://geouser:geopw@france-digues.fr:5984/toto"));
+        Assert.assertEquals("france-digues.fr:5984/toto",DatabaseRegistry.cleanDatabaseName("http://geouser:geopw@france-digues.fr:5984/toto/"));
     }
 }

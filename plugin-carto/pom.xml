@@ -3,9 +3,9 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>fr.sirs.plugins</groupId>
     <artifactId>plugin-carto</artifactId>
-    <version>1.4</version>
+    <version>1.7</version>
     <packaging>jar</packaging>
-    
+
     <name>plugin carto</name>
     <description>Plugin ajoutant des fonctionnalités de cartographie.</description>
 
@@ -16,7 +16,7 @@
     </parent>
 
     <properties>
-        <plugin.core.version.min>8</plugin.core.version.min>
+        <plugin.core.version.min>25</plugin.core.version.min>
         <geotoolkit.dwg.version>2.0.0-MC0004</geotoolkit.dwg.version>
         <geotoolkit.hexagon.version>2.0.0-MC0004</geotoolkit.hexagon.version>
     </properties>
@@ -97,7 +97,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
-                    <archive>                   
+                    <archive>
                         <manifest>
                             <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                             <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
@@ -105,7 +105,7 @@
                     </archive>
                 </configuration>
             </plugin>
-            
+
              <plugin>
                 <groupId>fr.sirs.maven</groupId>
                 <artifactId>gen-maven-plugin</artifactId>
@@ -149,10 +149,10 @@
                     <model>model/carto.ecore</model>
                     <modelPackage>fr.sirs.core.model</modelPackage>
                     <repositoryPackage>fr.sirs.core.component</repositoryPackage>
-                    
+
                 </configuration>
             </plugin>
-            
+
         </plugins>
     </build>
 

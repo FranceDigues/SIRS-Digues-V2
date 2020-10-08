@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -22,10 +22,12 @@ import fr.sirs.Injector;
 import fr.sirs.core.model.AireStockageDependance;
 import fr.sirs.core.model.AutreDependance;
 import fr.sirs.core.model.CheminAccesDependance;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.OuvrageVoirieDependance;
 import fr.sirs.theme.ui.AbstractPluginsButtonTheme;
 import fr.sirs.theme.ui.PojoTable;
 import fr.sirs.util.SimpleFXEditMode;
+import javafx.beans.property.ObjectProperty;
 import javafx.scene.Parent;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Tab;
@@ -94,7 +96,7 @@ public final class DependancesTheme extends AbstractPluginsButtonTheme {
         final HBox topPane = new HBox(separator, editMode);
         HBox.setHgrow(separator, Priority.ALWAYS);
 
-        final PojoTable dependancesTable = new PojoTable(Injector.getSession().getRepositoryForClass(clazz), title);
+        final PojoTable dependancesTable = new PojoTable(Injector.getSession().getRepositoryForClass(clazz), title, (ObjectProperty<? extends Element>) null);
         dependancesTable.editableProperty().bind(editMode.editionState());
         return new BorderPane(dependancesTable, topPane, null, null, null);
     }

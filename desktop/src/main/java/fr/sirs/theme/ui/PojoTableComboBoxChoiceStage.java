@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -39,20 +39,20 @@ public abstract class PojoTableComboBoxChoiceStage<T, C> extends PojoTableChoice
     protected final ComboBox<C> comboBox = new ComboBox<>();
 
     protected final Button cancel = new Button("Annuler");
-    protected final Button add = new Button("Ajouter");
+    protected final Button add= new Button("ajouter");
 
-    protected PojoTableComboBoxChoiceStage(){
+    protected PojoTableComboBoxChoiceStage() {
         comboBox.setConverter(new SirsStringConverter());
 
         cancel.setOnAction((ActionEvent event) -> {
-                retrievedElement.unbind();
-                retrievedElement.set(null);
-                hide();
+            retrievedElement.unbind();
+            retrievedElement.set(null);
+            hide();
         });
         add.setOnAction((ActionEvent event) -> {
-                hide();
+            hide();
         });
-        
+
         final HBox hBox = new HBox(cancel, add);
         hBox.setAlignment(Pos.CENTER);
         hBox.setSpacing(20);
@@ -63,4 +63,11 @@ public abstract class PojoTableComboBoxChoiceStage<T, C> extends PojoTableChoice
         vBox.setPadding(new Insets(20));
         setScene(new Scene(vBox));
     }
+    
+    protected PojoTableComboBoxChoiceStage(String okButtonTitle){
+        this();        
+        add.setText(okButtonTitle);
+
+    }
+    
 }

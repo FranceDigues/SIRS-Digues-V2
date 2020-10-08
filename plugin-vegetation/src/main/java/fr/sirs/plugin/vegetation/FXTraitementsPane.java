@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -23,6 +23,7 @@ import fr.sirs.SIRS;
 import fr.sirs.Session;
 import fr.sirs.core.component.ParcelleVegetationRepository;
 import fr.sirs.core.component.Previews;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.ParcelleVegetation;
 import fr.sirs.core.model.PlanVegetation;
 import fr.sirs.core.model.Preview;
@@ -34,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.ResourceBundle;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -80,7 +82,7 @@ public class FXTraitementsPane extends SplitPane {
         ui_parcelles.getSelectionModel().selectedItemProperty().addListener(this::parcelleChanged);
 
         uiSplitPane.getItems().add(rightPane);
-        
+
         //list to plan change
         VegetationSession.INSTANCE.planProperty().addListener((ObservableValue<? extends PlanVegetation> observable, PlanVegetation oldValue, PlanVegetation newValue) -> planChanged());
         planChanged();
@@ -118,7 +120,7 @@ public class FXTraitementsPane extends SplitPane {
         if(newValue==null){
             rightPane = new BorderPane();
         }else{
-            final PojoTable traitementsTable = new PojoTable(TraitementParcelleVegetation.class, null);
+            final PojoTable traitementsTable = new PojoTable(TraitementParcelleVegetation.class, null, (ObjectProperty<? extends Element>) null);
             traitementsTable.setParentElement(newValue);
             traitementsTable.setTableItems(()-> (ObservableList) newValue.getTraitements());
             rightPane = traitementsTable;

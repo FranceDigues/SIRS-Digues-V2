@@ -68,7 +68,7 @@
                               <Insets bottom="2.0" left="2.0" right="2.0" top="2.0" />
                            </GridPane.margin></Button>
                         <Label text="Nom de la base locale" GridPane.columnSpan="2" GridPane.rowIndex="4" />
-                        <TextField fx:id="uiDistantName" GridPane.columnSpan="2" GridPane.rowIndex="5" />
+                        <TextField fx:id="uiLocalName" GridPane.columnSpan="2" GridPane.rowIndex="5" />
                         <VBox fx:id="uiSynchroRunning" alignment="CENTER" spacing="10.0" GridPane.columnIndex="1" GridPane.rowIndex="6">
                            <children>
                               <ProgressIndicator maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="10.0" minWidth="10.0" VBox.vgrow="ALWAYS" />

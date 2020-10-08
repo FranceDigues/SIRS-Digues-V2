@@ -112,7 +112,7 @@ public class FXSystemeReperagePane extends BorderPane {
     private class BorneTable extends PojoTable {
 
         public BorneTable() {
-            super(SystemeReperageBorne.class, "Liste des bornes");
+            super(SystemeReperageBorne.class, "Liste des bornes", (ObjectProperty<Element>) null);
             getColumns().remove((TableColumn) editCol);
             fichableProperty.set(false);
             uiAdd.setVisible(false);

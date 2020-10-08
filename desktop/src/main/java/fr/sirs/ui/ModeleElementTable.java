@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -24,6 +24,7 @@ import fr.sirs.core.model.Element;
 import fr.sirs.core.model.report.ModeleElement;
 import fr.sirs.theme.ui.AbstractFXElementPane;
 import fr.sirs.theme.ui.PojoTable;
+import javafx.beans.property.ObjectProperty;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
@@ -33,7 +34,7 @@ import javafx.scene.layout.BorderPane;
 /**
  * Table displaying list of available models for element printing. Special behavior :
  * Model editor is opened next to the table.
- * 
+ *
  * @author Johann Sorel (Geomatys)
  * @author Alexis Manin (Geomatys)
  */
@@ -42,7 +43,7 @@ public class ModeleElementTable extends PojoTable {
     private AbstractFXElementPane editor;
 
     public ModeleElementTable() {
-        super(Injector.getSession().getRepositoryForClass(ModeleElement.class), "Modèles .odt enregistrés en base");
+        super(Injector.getSession().getRepositoryForClass(ModeleElement.class), "Modèles .odt enregistrés en base", (ObjectProperty<Element>) null);
         editableProperty().set(false);
         detaillableProperty().set(false);
         fichableProperty().set(false);
@@ -53,11 +54,16 @@ public class ModeleElementTable extends PojoTable {
         ficheModeVisibleProperty().set(false);
         filterVisibleProperty().set(false);
 
+        /*
+        On autorise l'ajout uniquement pour les roles "administrateur, "utilisateur"
+        et "externe" (pas pour les invités).
+        On désactive donc les boutons d'ajout si l'utilisateur courant n'est pas dans un de ces rôles.
+        */
         uiAdd.disableProperty().unbind();
-        uiAdd.setDisable(false);
+        uiAdd.disableProperty().bind(Injector.getSession().adminOrUserOrExtern().not());
 
         uiDelete.disableProperty().unbind();
-        uiDelete.setDisable(false);
+        uiDelete.disableProperty().bind(Injector.getSession().adminOrUserOrExtern().not());
 
         for(TableColumn col : getColumns()) {
             if("Désignation".equalsIgnoreCase(col.getText())){
@@ -75,6 +81,7 @@ public class ModeleElementTable extends PojoTable {
 
         setRight(new BorderPane());
     }
+
 
     @Override
     protected Object editPojo(Object pojo) {

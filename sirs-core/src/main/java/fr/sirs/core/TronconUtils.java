@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -84,10 +83,9 @@ import org.opengis.referencing.operation.CoordinateOperation;
 import org.opengis.referencing.operation.TransformException;
 import org.opengis.util.FactoryException;
 
-
 /**
- * A set of utility methods for manipulation of geometries of {@link Positionable}
- * or {@link TronconDigue} objects.
+ * A set of utility methods for manipulation of geometries of
+ * {@link Positionable} or {@link TronconDigue} objects.
  *
  * @author Johann Sorel (Geomatys)
  * @author Alexis Manin (Geomatys)
@@ -99,14 +97,13 @@ public class TronconUtils {
     //==================================================================================================================
     // UTILITAIRES DU CONTRÔLE DE L'ARCHIVAGE DES TRONÇONS ET DES OBJETS QUI LES RÉFÉRENCENT.
     //==================================================================================================================
-
     /**
      * Description des scénarios d'évolution de l'archivage d'un tronçon.
      */
     public enum ArchiveMode {
         /**
-         * L'état d'archivage reste inchangé.
-         * Le tronçon archivé reste archivé à date constante. Le tronçon non archivé reste non archivé.
+         * L'état d'archivage reste inchangé. Le tronçon archivé reste archivé à
+         * date constante. Le tronçon non archivé reste non archivé.
          */
         UNCHANGED,
         /**
@@ -126,6 +123,7 @@ public class TronconUtils {
     /**
      * Copy a {@link TronconDigue} and all bound data, i.e linear referencing
      * systems and objects positioned on it.
+     *
      * @param original Linear to copy
      * @param session Current session, to perform database updates.
      * @return A copy of input data, up to date in database.
@@ -138,7 +136,7 @@ public class TronconUtils {
 
         final SystemeReperageRepository srRepo = InjectorCore.getBean(SystemeReperageRepository.class);
         SystemeReperage srCopy;
-        final Map<String, String> srMapping =new HashMap<>();
+        final Map<String, String> srMapping = new HashMap<>();
         for (final SystemeReperage sr : srRepo.getByLinearStreaming(original)) {
             srCopy = sr.copy();
             srCopy.setLinearId(tdCopy.getId());
@@ -156,15 +154,18 @@ public class TronconUtils {
         for (final Positionable objet : getPositionableList(original)) {
             // Si on a un objet imbriqué dans un document, on le passe. Il sera
             // mis à jour via son parent.
-            if (!objet.getId().equals(objet.getDocumentId()))
+            if (!objet.getId().equals(objet.getDocumentId())) {
                 continue;
+            }
 
             final Positionable copy = objet.copy();
             toSave.add(copy);
-            if (copy instanceof AvecForeignParent)
+            if (copy instanceof AvecForeignParent) {
                 ((AvecForeignParent) copy).setForeignParentId(tdCopy.getId());
-            if (copy.getSystemeRepId() != null)
+            }
+            if (copy.getSystemeRepId() != null) {
                 copy.setSystemeRepId(srMapping.get(copy.getSystemeRepId()));
+            }
         }
 
         // On sauvegarde les changements.
@@ -177,56 +178,19 @@ public class TronconUtils {
     }
 
     /**
-     * Méthode d'archivage des tronçons de digue et des objets s'y référant dotés d'une validité temporelle (c'est à dire
-     * implémentant l'interface {@link AvecBornesTemporelles}).
-     *
-     * La procédure d'archivage consiste à affecter une date de fin au tronçon de digue et aux objets archivables qui s'y
-     * réfèrent, à condition qu'ils n'aient pas déjà une date de fin ou, éventuellement, que cette date de fin soit
-     * postérieure à la date d'archivage. Cette dernière condition doit être volontairement activée.
-     *
-     * Cette méthode est implémentée ici de manière à ce que le code d'archivage puisse être capitalisé au fur et à mesure.
-     *
-     * @param section Le tronçon à archiver.
-     * @param session La session à utiliser pour interagir avec la bdd.
-     * @param archiveDate Date d'archivage du tronçon et des objets. Ne doit pas être nul.
-     * @param includeAfter Vrai pour forcer l'archivage des objets dont la date est postérieure à la date d'archive.
-     * @return Rapports d'erreur pour les objets qui n'ont pu être mis à jour en base.
-     * @throws DbAccessException Si le tronçon à mettre à jour ne peut être sauvegardé.
-     */
-    public static List<DocumentOperationResult> archiveSectionWithTemporalObjects(final TronconDigue section,
-            final SessionCore session, final LocalDate archiveDate, final boolean includeAfter) {
-        ArgumentChecks.ensureNonNull("Tronçon à archiver", section);
-        ArgumentChecks.ensureNonNull("Date d'archivage (de fin)", archiveDate);
-        ArgumentChecks.ensureNonNull("Session de données", session);
-
-        /* On n'affecte une date de fin qu'aux objets qui n'en on pas déjà une SAUF si cette dernière est
-         * postérieure à la date d'archivage. Cette condition provient du code initial récupéré de la fusion de
-         * tronçons, avec une date d'archivage fixée à la veille de la date à laquelle est réalisée la fusion.
-         * Mais quelle est la raison pratique de cette condition… ? Difficile à dire.
-         *
-         * Afin de pouvoir paramétrer ce comportement, la condition de postériorité de la date doit donc être
-         * volontairement activée.
-         */
-        final Predicate<AvecBornesTemporelles> updateCondition = input -> {
-            final LocalDate endDate = input.getDate_fin();
-            return endDate == null || (includeAfter && endDate.isAfter(archiveDate));
-        };
-
-        return archiveSectionWithTemporalObjects(section, session, archiveDate, updateCondition);
-    }
-
-    /**
      *
      * @param section The linear object to archive.
      * @param session The session to use for database connection.
-     * @param archiveDate Archive date to set (as {@link AvecBornesTemporelles#setDate_fin(java.time.LocalDate) }. If null, the linear and
-     * its related data will be unarchived.
-     * @param updateCondition Update only objects matching this predicate (for which {@link Predicate#test(java.lang.Object) } is true.
-     * @return The list of update failures. Not that if the linear itself cannot be updated, an exception will be thrown.
+     * @param archiveDate Archive date to set (as {@link AvecBornesTemporelles#setDate_fin(java.time.LocalDate)
+     * }. If null, the linear and its related data will be unarchived.
+     * @param filter Update only objects matching this predicate (for which {@link Predicate#test(java.lang.Object)
+     * } is true.
+     * @return The list of update failures. Not that if the linear itself cannot
+     * be updated, an exception will be thrown.
      * @throws DbAccessException If the given linear object cannot be updated.
      */
     public static List<DocumentOperationResult> archiveSectionWithTemporalObjects(final TronconDigue section,
-            final SessionCore session, final LocalDate archiveDate, final Predicate<AvecBornesTemporelles> updateCondition) {
+            final SessionCore session, final LocalDate archiveDate, final Predicate<AvecBornesTemporelles> filter) {
 
         // First we update linear object. If it fails, it's no use to continue.
         section.setDate_fin(archiveDate);
@@ -237,93 +201,86 @@ public class TronconUtils {
             tdRepo.update(section);
         }
 
-        final Consumer<AvecBornesTemporelles> setArchiveDate = dated -> dated.setDate_fin(archiveDate);
-
         /* To avoid memory nor processing overload, we manually process and update
          * objects by type. Another approach would be to use getPositionableList
          * to get all objects to update, but it put all of them in memory, and the
          * session bulk is forced to sort them before updating them in database.
          */
-        final String linearId = section.getId();
-        final Function<
-                AbstractPositionableRepository,
-                Map.Entry<AbstractPositionableRepository, List<? extends AvecBornesTemporelles>>
-                > extractAndUpdate = repo -> {
-            final List linears = repo.getByLinearId(linearId);
-            linears.removeIf(updateCondition.negate());
-            linears.forEach(setArchiveDate);
-            return new AbstractMap.SimpleEntry<>(repo, linears);
-        };
-
-        List updateResponses = session.getRepositoriesForClass(AvecBornesTemporelles.class).stream()
+        return session.getRepositoriesForClass(AvecBornesTemporelles.class).stream()
                 .filter(AbstractPositionableRepository.class::isInstance)
                 .map(AbstractPositionableRepository.class::cast)
-                .map(extractAndUpdate)
-                .map(entry -> entry.getKey().executeBulk(entry.getValue()))
-                .flatMap(List::stream)
+                .map(repo -> {
+                    final List linears = repo.getByLinearId(section.getId());
+                    linears.removeIf(filter.negate());
+                    linears.forEach(dated -> ((AvecBornesTemporelles) dated).setDate_fin(archiveDate));
+                    return repo.executeBulk(linears);
+                })
+                .flatMap(List<DocumentOperationResult>::stream)
                 .collect(Collectors.toList());
-
-        final AbstractSIRSRepository<BorneDigue> borneRepo = session.getRepositoryForClass(BorneDigue.class);
-        // TODO : check if bornes are used by another linear ? Doing it would cause a
-        // big performance loss, for a case which is possible but has never been encountered yet.
-        final List<BorneDigue> bornes = borneRepo.get(section.getBorneIds()).stream()
-                .filter(updateCondition)
-                .peek(setArchiveDate)
-                .collect(Collectors.toList());
-        updateResponses.addAll(borneRepo.executeBulk(bornes));
-
-        return updateResponses;
     }
 
-    /**
-     * Méthode de mise à jour de l'archivage d'un tronçon avec les objets qui le référencent.
-     *
-     * D'après la demande explicite de Jordan Perrin (SYM-1444), les objets dont la date de fin est identique à l'ancienne
-     * date d'archivage du tronçon, voient alors leur nouvelle date de fin modifiée de manière à suivre celle du tronçon
-     * (voir commentaire du 22/05/2017 15:10).
-     *
-     * @param section
-     * @param session
-     * @param oldArchiveDate
-     * @param archiveDate
-     * @return Rapports de mise à jour en base du tronçon et des objets.
-     */
-    public static List<DocumentOperationResult> updateArchiveSectionWithTemporalObjects(final TronconDigue section,
-            final SessionCore session, final LocalDate oldArchiveDate, final LocalDate archiveDate){
+    public static List<DocumentOperationResult> archiveBornes(final Collection<String> borneIds,
+            final SessionCore session, final LocalDate archiveDate, final Predicate<AvecBornesTemporelles> updateCondition) {
 
-        final Predicate<AvecBornesTemporelles> updateCondition = dated
-                -> dated.getDate_fin()==null || dated.getDate_fin().isEqual(oldArchiveDate);
-        return archiveSectionWithTemporalObjects(section, session, archiveDate, updateCondition);
-    }
+        final List<TronconDigue> allTroncons = session.getRepositoryForClass(TronconDigue.class).getAll();
 
-    /**
-     * Méthode de désarchivage d'un tronçon et des objets qui le référencent.
-     *
-     * @param section
-     * @param session
-     * @param initialArchiveDate Date d'archivage des objets référençant le tronçon qui doivent être désarchivés.
-     * @return Rapports de mise à jour en base du tronçon et des objets.
-     */
-    public static List<DocumentOperationResult> unarchiveSectionWithTemporalObjects(final TronconDigue section, final SessionCore session, final LocalDate initialArchiveDate) {
-        ArgumentChecks.ensureNonNull("Date d'archivage (de fin) initiale (à supprimer)", initialArchiveDate);
-        final Predicate<AvecBornesTemporelles> updateCondition = dated -> {
-            final LocalDate date = dated.getDate_fin();
-            return date != null && date.isEqual(initialArchiveDate);
+        final Consumer<AvecBornesTemporelles> setArchiveDate = dated -> dated.setDate_fin(archiveDate);
+
+        /*
+        Predicate over milestones must always return true when unarchiving, 
+        because the rule is to archive the milestone if and only if all the 
+        sections which it is referenced by are themselves archived.
+        An archive date 'null' means a section is currently being unarchived and 
+        so, the referenced milestones MUST all be unarchived.
+         */
+        final Predicate<BorneDigue> unarchive = (BorneDigue t) -> archiveDate == null;
+
+        // [SYM-1692] requires explicitly the milestones only linked to an archived section to be archived too.
+        // Prédicate over milestones to filter referenced ones by unarchived sections.
+        final Predicate<BorneDigue> referencedByUnarchivedSection = new Predicate<BorneDigue>() {
+            @Override
+            public boolean test(BorneDigue borne) {
+                /*
+                A milestone must be archived if and only if there is 
+                no more unarchived section referencing it.
+                
+                This predicate checks the current milestone is referenced by an 
+                unarchived section.
+                 */
+                for (final TronconDigue section : allTroncons) {
+                    // We search an unarchived section referencing the current milestone
+                    if (section.getDate_fin() == null || section.getDate_fin().isAfter(archiveDate)) {
+                        for (final String borneId : section.getBorneIds()) {
+                            if (borneId.equals(borne.getId())) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
         };
 
-        return archiveSectionWithTemporalObjects(section, session, null, updateCondition);
-    }
+        final AbstractSIRSRepository<BorneDigue> borneRepo = session.getRepositoryForClass(BorneDigue.class);
 
+        final List<BorneDigue> bornes = borneRepo.get(borneIds).stream()
+                .filter(updateCondition)
+                .filter(unarchive.or(referencedByUnarchivedSection.negate()))
+                .peek(setArchiveDate)
+                .collect(Collectors.toList());
+
+        return borneRepo.executeBulk(bornes);
+    }
 
     //==================================================================================================================
     // UTILITAIRES DE DÉCOUPAGE DE TRONÇON
     //==================================================================================================================
-
-
     /**
-     * Crée une copie du tronçon en entrée, dont la géométrie se limite à la polyligne donnée.
-     * Les objets du tronçon source présents sur cette nouvelle polyligne sont copiés,
-     * et les systèmes de repérages copiés et adaptés à la nouvelle géométrie.
+     * Crée une copie du tronçon en entrée, dont la géométrie se limite à la
+     * polyligne donnée. Les objets du tronçon source présents sur cette
+     * nouvelle polyligne sont copiés, et les systèmes de repérages copiés et
+     * adaptés à la nouvelle géométrie.
+     *
      * @param troncon troncon a decouper
      * @param cutLinear partie du troncon a garder
      * @param newName Le nom à affecter au troncon généré.
@@ -447,12 +404,13 @@ public class TronconUtils {
 
             // Do not update archived data.
             if (original instanceof AvecBornesTemporelles) {
-                LocalDate date = ((AvecBornesTemporelles)original).getDate_fin();
-                if (date != null && date.isBefore(now))
+                LocalDate date = ((AvecBornesTemporelles) original).getDate_fin();
+                if (date != null && date.isBefore(now)) {
                     continue;
+                }
             }
 
-            final boolean isDocument = ((Element)original).getParent() == null;
+            final boolean isDocument = ((Element) original).getParent() == null;
 
             //on vérifie que cet objet intersecte le segment
             originalGeometry = original.getGeometry();
@@ -461,8 +419,9 @@ public class TronconUtils {
                 originalGeometry = buildGeometry(sourceLine, sourceTronconSegments, original, bdRepo);
                 if (originalGeometry == null && isDocument) {
                     throw new IllegalStateException("Impossible de déterminer la géométrie de l'objet suivant :\n" + original);
-                } else if (originalGeometry == null)
+                } else if (originalGeometry == null) {
                     continue;
+                }
                 original.setGeometry(originalGeometry);
             }
 
@@ -476,7 +435,7 @@ public class TronconUtils {
             à représenter temporairement sous forme de géométrie "POINT" les
             géométries "LINESTRING" qui, de fait représentent des points, de manière
             à obtenir les bons résultats d'opérations topologiques.
-            */
+             */
             if (originalGeometry instanceof LineString) {
                 final LineString line = (LineString) originalGeometry;
 
@@ -496,10 +455,11 @@ public class TronconUtils {
 
             copied = original.copy();
             if (copied instanceof AvecForeignParent) {
-                ((AvecForeignParent)copied).setForeignParentId(tronconCp.getId());
+                ((AvecForeignParent) copied).setForeignParentId(tronconCp.getId());
             }
-            if (isDocument)
+            if (isDocument) {
                 newPositions.add(copied);
+            }
 
             // Mise à jour des infos géographiques
             if (!(originalGeometry instanceof Point || intersectionBuffer.covers(originalGeometry))) {
@@ -551,44 +511,52 @@ public class TronconUtils {
         return tronconCp;
     }
 
-
     //==================================================================================================================
     // UTILITAIRES DE RÉCUPÉRATION D'ENTITÉS POSITIONNÉES SUR LE TRONÇON
     //==================================================================================================================
-
-
     /**
-     * Retrieve the list of owners  of a linear whose id is given as parameter.
-     * @param linearId Id of the {@link TronconDigue} to get bound {@link ProprieteTroncon} for.
-     * @return List of {@link ProprieteTroncon} bound to the given {@link TronconDigue}.
+     * Retrieve the list of owners of a linear whose id is given as parameter.
+     *
+     * @param linearId Id of the {@link TronconDigue} to get bound
+     * {@link ProprieteTroncon} for.
+     * @return List of {@link ProprieteTroncon} bound to the given
+     * {@link TronconDigue}.
      */
-    public static List<ProprieteTroncon> getProprieteList(final String linearId){
+    public static List<ProprieteTroncon> getProprieteList(final String linearId) {
         return InjectorCore.getBean(SessionCore.class).getProprietesByTronconId(linearId);
     }
 
     /**
-     * Retrieve the list of owners  of a linear.
-     * @param linear {@link TronconDigue} to get bound {@link ProprieteTroncon} for.
-     * @return List of {@link ProprieteTroncon} bound to the given {@link TronconDigue}.
+     * Retrieve the list of owners of a linear.
+     *
+     * @param linear {@link TronconDigue} to get bound {@link ProprieteTroncon}
+     * for.
+     * @return List of {@link ProprieteTroncon} bound to the given
+     * {@link TronconDigue}.
      */
-    public static List<ProprieteTroncon> getProprieteList(final TronconDigue linear){
+    public static List<ProprieteTroncon> getProprieteList(final TronconDigue linear) {
         return getProprieteList(linear.getId());
     }
 
     /**
      * Retrieve the list of guards linked to a linear whose id is given as a
      * parameter.
-     * @param linearId Id of the {@link TronconDigue} to get bound {@link GardeTroncon} for.
-     * @return List of {@link GardeTroncon} bound to the given {@link TronconDigue}.
+     *
+     * @param linearId Id of the {@link TronconDigue} to get bound
+     * {@link GardeTroncon} for.
+     * @return List of {@link GardeTroncon} bound to the given
+     * {@link TronconDigue}.
      */
-    public static List<GardeTroncon> getGardeList(final String linearId){
+    public static List<GardeTroncon> getGardeList(final String linearId) {
         return InjectorCore.getBean(SessionCore.class).getGardesByTronconId(linearId);
     }
 
     /**
-     * Retrieve the list of guards  of a linear.
+     * Retrieve the list of guards of a linear.
+     *
      * @param linear {@link TronconDigue} to get bound {@link GardeTroncon} for.
-     * @return List of {@link GardeTroncon} bound to the given {@link TronconDigue}.
+     * @return List of {@link GardeTroncon} bound to the given
+     * {@link TronconDigue}.
      */
     public static List<GardeTroncon> getGardeList(final TronconDigue linear) {
         return getGardeList(linear.getId());
@@ -597,15 +565,18 @@ public class TronconUtils {
     /**
      * Retrieve the list of objects linked to a linear whose id is given as a
      * parameter.
-     * @param linearId Id of the {@link TronconDigue} to get bound {@link Objet} for.
+     *
+     * @param linearId Id of the {@link TronconDigue} to get bound {@link Objet}
+     * for.
      * @return List of {@link Objet} bound to the given {@link TronconDigue}.
      */
-    public static List<Objet> getObjetList(final String linearId){
+    public static List<Objet> getObjetList(final String linearId) {
         return InjectorCore.getBean(SessionCore.class).getObjetsByTronconId(linearId);
     }
 
     /**
      * Retrieve the list of objects linked to a linear.
+     *
      * @param linear {@link TronconDigue} to get bound {@link Objet} for.
      * @return List of {@link Objet} bound to the given {@link TronconDigue}.
      */
@@ -616,37 +587,45 @@ public class TronconUtils {
     /**
      * Retrieve the list of document positions linked to a linear whose id is
      * given as a parameter.
-     * @param linearId Id of the {@link TronconDigue} to get bound {@link AbstractPositionDocument} for.
-     * @return List of {@link AbstractPositionDocument} bound to the given {@link TronconDigue}.
+     *
+     * @param linearId Id of the {@link TronconDigue} to get bound
+     * {@link AbstractPositionDocument} for.
+     * @return List of {@link AbstractPositionDocument} bound to the given
+     * {@link TronconDigue}.
      */
-    public static List<AbstractPositionDocument> getPositionDocumentList(final String linearId){
+    public static List<AbstractPositionDocument> getPositionDocumentList(final String linearId) {
         return InjectorCore.getBean(SessionCore.class).getPositionDocumentsByTronconId(linearId);
     }
 
     /**
      * Retrieve the list of document positions linked to a linear given as a
      * parameter.
-     * @param linear {@link TronconDigue} to get bound {@link AbstractPositionDocument} for.
-     * @return List of {@link AbstractPositionDocument} bound to the given {@link TronconDigue}.
+     *
+     * @param linear {@link TronconDigue} to get bound
+     * {@link AbstractPositionDocument} for.
+     * @return List of {@link AbstractPositionDocument} bound to the given
+     * {@link TronconDigue}.
      */
-    public static List<AbstractPositionDocument> getPositionDocumentList(final TronconDigue linear){
+    public static List<AbstractPositionDocument> getPositionDocumentList(final TronconDigue linear) {
         return getPositionDocumentList(linear.getId());
     }
 
     /**
      * Return the positionable included, linked or included into linked elements
      * for the linar given as a parameter.
+     *
      * @param linear {@link TronconDigue} to get bound {@link Positionable} for.
      * @return a list containing the objets, positions de documents, proprietes,
      * gardes and photos related to the linear.
      */
-    public static List<Positionable> getPositionableList(final TronconDigue linear){
+    public static List<Positionable> getPositionableList(final TronconDigue linear) {
         return getPositionableList(linear.getId());
     }
 
     /**
      * Return the positionable included, linked or included into linked elements
      * for the linar given as a parameter.
+     *
      * @param linearId Id of the linear to filter on.
      * @return a list containing the objets, positions de documents, proprietes,
      * gardes and photos related to the linear.
@@ -655,21 +634,21 @@ public class TronconUtils {
         return InjectorCore.getBean(SessionCore.class).getPositionableByLinearId(linearId);
     }
 
-
     //==================================================================================================================
     // UTILITAIRES DE FUSION DE TRONÇON
     //==================================================================================================================
-
-
     /**
-     * On ajoute / copie les propriétés du second tronçon (incluant les structures) dans le premier.
+     * On ajoute / copie les propriétés du second tronçon (incluant les
+     * structures) dans le premier.
      *
      * TODO : check SR par défaut dans le troncon final.
      *
      * @param mergeResult Le tronçon qui va servir de base à la fusion, qui va
      * être mis à jour.
-     * @param mergeParam Le tronçon dont on va prendre les propriétés pour les copier dans le second.
-     * @param session La session applicative permettant de mettre à jour les SRs.
+     * @param mergeParam Le tronçon dont on va prendre les propriétés pour les
+     * copier dans le second.
+     * @param session La session applicative permettant de mettre à jour les
+     * SRs.
      * @return le premier tronçon (mergeResult).
      */
     public static TronconDigue mergeTroncon(TronconDigue mergeResult, TronconDigue mergeParam, SessionCore session) {
@@ -687,7 +666,7 @@ public class TronconUtils {
         final Geometry line1 = mergeResult.getGeometry();
         final Geometry line2 = mergeParam.getGeometry();
 
-        final List<Coordinate> coords = new  ArrayList<>();
+        final List<Coordinate> coords = new ArrayList<>();
         coords.addAll(Arrays.asList(line1.getCoordinates()));
         coords.addAll(Arrays.asList(line2.getCoordinates()));
 
@@ -696,7 +675,7 @@ public class TronconUtils {
         serie.setUserData(line1.getUserData());
         mergeResult.setGeometry(serie);
 
-        ((AbstractSIRSRepository<TronconDigue>)session.getRepositoryForClass(mergeResult.getClass())).update(mergeResult);
+        ((AbstractSIRSRepository<TronconDigue>) session.getRepositoryForClass(mergeResult.getClass())).update(mergeResult);
 
         /* On fusionne les SR. On cherche les systèmes portant le même nom dans
          * les deux tronçons originaux, puis en fait un seul comportant les bornes
@@ -752,15 +731,18 @@ public class TronconUtils {
         for (final Positionable objet : getPositionableList(mergeParam)) {
             // Si on a un objet imbriqué dans un document, on le passe. Il sera
             // mis à jour via son parent.
-            if (!objet.getId().equals(objet.getDocumentId()))
+            if (!objet.getId().equals(objet.getDocumentId())) {
                 continue;
+            }
 
             final Positionable copy = objet.copy();
             toSave.add(copy);
-            if (copy instanceof AvecForeignParent)
+            if (copy instanceof AvecForeignParent) {
                 ((AvecForeignParent) copy).setForeignParentId(mergeResult.getId());
-            if (copy.getSystemeRepId() != null)
+            }
+            if (copy.getSystemeRepId() != null) {
                 copy.setSystemeRepId(modifiedSRs.get(copy.getSystemeRepId()));
+            }
         }
 
         // On sauvegarde les changements.
@@ -772,14 +754,13 @@ public class TronconUtils {
         return mergeResult;
     }
 
-
     /**
      * Creation ou mise a jour du systeme de reperage elementaire .
      *
      * @param troncon Tronçon à analyser.
      * @param session La session applicative en cours.
      */
-    public static void updateSRElementaireIfExists(TronconDigue troncon, SessionCore session){
+    public static void updateSRElementaireIfExists(TronconDigue troncon, SessionCore session) {
 
         final SystemeReperageRepository srRepo = (SystemeReperageRepository) session.getRepositoryForClass(SystemeReperage.class);
         final AbstractSIRSRepository<BorneDigue> bdRepo = session.getRepositoryForClass(BorneDigue.class);
@@ -796,9 +777,10 @@ public class TronconUtils {
             }
         }
 
-        if(sr!=null) updateSRElementaire(troncon, session);
+        if (sr != null) {
+            updateSRElementaire(troncon, session);
+        }
     }
-
 
     /**
      * Creation ou mise a jour du systeme de reperage elementaire .
@@ -806,7 +788,7 @@ public class TronconUtils {
      * @param troncon Tronçon à analyser.
      * @param session La session applicative en cours.
      */
-    public static void updateSRElementaire(TronconDigue troncon, SessionCore session){
+    public static void updateSRElementaire(TronconDigue troncon, SessionCore session) {
 
         final SystemeReperageRepository srRepo = (SystemeReperageRepository) session.getRepositoryForClass(SystemeReperage.class);
         final AbstractSIRSRepository<BorneDigue> bdRepo = session.getRepositoryForClass(BorneDigue.class);
@@ -824,11 +806,11 @@ public class TronconUtils {
         }
 
         //on le crée s'il n'existe pas
-        if(sr==null){
+        if (sr == null) {
             sr = srRepo.create();
             sr.setLibelle(SR_ELEMENTAIRE);
             sr.setLinearId(troncon.getDocumentId());
-            srRepo.add(sr,troncon);
+            srRepo.add(sr, troncon);
         }
 
         // On cherche les bornes de début et de fin du SR élémentaire : on se base pour cela sur les libellés de bornes.
@@ -838,15 +820,14 @@ public class TronconUtils {
         // On parcours les bornes du SR élémentaire…
         final BorneDigueRepository bdr = (BorneDigueRepository) session.getRepositoryForClass(BorneDigue.class);
         final List<BorneDigue> tronconBornes = bdr.get(troncon.getBorneIds());
-        for(final SystemeReperageBorne srb : sr.getSystemeReperageBornes()){
+        for (final SystemeReperageBorne srb : sr.getSystemeReperageBornes()) {
 
             // On cherche pour chaque borne du SR élémentaire s'il s'agit de la borne de début ou de la borne de fin.
-            for(final BorneDigue bd : tronconBornes){
-                if(bd.getId().equals(srb.getBorneId())){
-                    if(SR_ELEMENTAIRE_START_BORNE.equals(bd.getLibelle())){
+            for (final BorneDigue bd : tronconBornes) {
+                if (bd.getId().equals(srb.getBorneId())) {
+                    if (SR_ELEMENTAIRE_START_BORNE.equals(bd.getLibelle())) {
                         srbStart = srb;
-                    }
-                    else if(SR_ELEMENTAIRE_END_BORNE.equals(bd.getLibelle())){
+                    } else if (SR_ELEMENTAIRE_END_BORNE.equals(bd.getLibelle())) {
                         srbEnd = srb;
                     }
                 }
@@ -855,7 +836,7 @@ public class TronconUtils {
 
         final BorneDigue bdStart;
         final BorneDigue bdEnd;
-        if(srbStart==null){
+        if (srbStart == null) {
             //creation de la borne de début
             bdStart = bdRepo.create();
             bdStart.setLibelle(SR_ELEMENTAIRE_START_BORNE);
@@ -868,11 +849,11 @@ public class TronconUtils {
             // est non nulle, sert d'offset aux autres valeurs de PR calculées dans le SR élémentaire.
             srbStart.setValeurPR(0);
             sr.systemeReperageBornes.add(srbStart);
-        }else{
+        } else {
             bdStart = bdRepo.get(srbStart.getBorneId());
         }
 
-        if(srbEnd==null){
+        if (srbEnd == null) {
             //creation de la borne de fin
             bdEnd = bdRepo.create();
             bdEnd.setLibelle(SR_ELEMENTAIRE_END_BORNE);
@@ -881,75 +862,76 @@ public class TronconUtils {
             srbEnd = session.getElementCreator().createElement(SystemeReperageBorne.class);
             srbEnd.setBorneId(bdEnd.getDocumentId());
             sr.systemeReperageBornes.add(srbEnd);
-        }else{
+        } else {
             bdEnd = bdRepo.get(srbEnd.getBorneId());
         }
 
         // Dans tous les cas, on force le PR de la borne de fin à s'aligner sur la valeur du PR de la borne de début
         // augmentée de la longueur du tronçon.
         final float prStart = srbStart.getValeurPR();
-        srbEnd.setValeurPR((float)troncon.getGeometry().getLength()+prStart);
-
+        srbEnd.setValeurPR((float) troncon.getGeometry().getLength() + prStart);
 
         // On réajuste la postion des bornes de début et de fin aux extrémités du tronçon.
         final Coordinate[] coords = troncon.getGeometry().getCoordinates();
         bdStart.setGeometry(GO2Utilities.JTS_FACTORY.createPoint(coords[0]));
-        bdEnd.setGeometry(GO2Utilities.JTS_FACTORY.createPoint(coords[coords.length-1]));
+        bdEnd.setGeometry(GO2Utilities.JTS_FACTORY.createPoint(coords[coords.length - 1]));
 
         bdRepo.executeBulk(bdStart, bdEnd);
 
-
         // Mise à jour des PRs des autres bornes du SR élémentaire au cas où la géométrie du tronçon aurait changé.
         final SegmentInfo[] buildSegments = buildSegments(asLineString(troncon.getGeometry()));
-        for(final SystemeReperageBorne currentSrb : sr.getSystemeReperageBornes()){
+        for (final SystemeReperageBorne currentSrb : sr.getSystemeReperageBornes()) {
             // Le PR de la borne de début ne doit pas être calculé et celui de la borne de fin a déjà été calculé.
-            if(currentSrb!=srbStart && currentSrb!=srbEnd){
+            if (currentSrb != srbStart && currentSrb != srbEnd) {
                 // On a besoin de la borne correspondante
-                for(final BorneDigue bd : tronconBornes){
-                    if(bd.getId().equals(currentSrb.getBorneId())){
+                for (final BorneDigue bd : tronconBornes) {
+                    if (bd.getId().equals(currentSrb.getBorneId())) {
                         final ProjectedPoint proj = projectReference(buildSegments, bd.getGeometry());
-                        currentSrb.setValeurPR((float) proj.distanceAlongLinear+prStart);
+                        currentSrb.setValeurPR((float) proj.distanceAlongLinear + prStart);
                         break;
                     }
                 }
             }
         }
 
-        srRepo.update(sr,troncon);
+        srRepo.update(sr, troncon);
     }
 
     /**
-     * Méthode de recherche du PR de la borne de début du SR élémentaire d'un tronçon.
+     * Méthode de recherche du PR de la borne de début du SR élémentaire d'un
+     * tronçon.
      *
-     * Cette méthode s'appuie sur l'étiquette définie par {@link SirsCore#SR_ELEMENTAIRE_START_BORNE}.
+     * Cette méthode s'appuie sur l'étiquette définie par
+     * {@link SirsCore#SR_ELEMENTAIRE_START_BORNE}.
      *
      * @param troncon Le tronçon utilisé pour la recherche des bornes.
-     * @param sr Le SR dont on recherche la borne de début, qui doit être un SR élémentaire et relatif au tronçon donné en premier argument.
+     * @param sr Le SR dont on recherche la borne de début, qui doit être un SR
+     * élémentaire et relatif au tronçon donné en premier argument.
      * @param session Session utilisée pour la connexion à la base.
      * @return Le PR de la borne de début du SR élémentaire.
      */
-    public static float getPRStart(final TronconDigue troncon, final SystemeReperage sr, final SessionCore session){
+    public static float getPRStart(final TronconDigue troncon, final SystemeReperage sr, final SessionCore session) {
 
         final List<BorneDigue> tronconBornes = session.getRepositoryForClass(BorneDigue.class).get(troncon.getBorneIds());
-        for(final SystemeReperageBorne currentSrb : sr.getSystemeReperageBornes()){
-            for(final BorneDigue currentBorne : tronconBornes){
-                if(currentBorne.getId().equals(currentSrb.getBorneId()) && SirsCore.SR_ELEMENTAIRE_START_BORNE.equals(currentBorne.getLibelle())){
+        for (final SystemeReperageBorne currentSrb : sr.getSystemeReperageBornes()) {
+            for (final BorneDigue currentBorne : tronconBornes) {
+                if (currentBorne.getId().equals(currentSrb.getBorneId()) && SirsCore.SR_ELEMENTAIRE_START_BORNE.equals(currentBorne.getLibelle())) {
                     return currentSrb.getValeurPR();
                 }
             }
         }
-        throw new IllegalStateException("Le système de repérage "+sr.getLibelle()+" n'a pas de borne \""+SirsCore.SR_ELEMENTAIRE_START_BORNE+"\".");
+        throw new IllegalStateException("Le système de repérage " + sr.getLibelle() + " n'a pas de borne \"" + SirsCore.SR_ELEMENTAIRE_START_BORNE + "\".");
     }
 
     /**
-     * Recalcule des geometries des differents positionnables apres que
-     * la géometrie ou que les SR du troncon aient changés.
+     * Recalcule des geometries des differents positionnables apres que la
+     * géometrie ou que les SR du troncon aient changés.
      *
      * @param troncon {@link TronconDigue} contenant les objets à mettre à jour.
      * @param session La session applicative active.
      */
-    public static void updatePositionableGeometry(TronconDigue troncon, SessionCore session){
-        for(Objet obj : getObjetList(troncon)){
+    public static void updatePositionableGeometry(TronconDigue troncon, SessionCore session) {
+        for (Objet obj : getObjetList(troncon)) {
             final LineString structGeom = buildGeometry(
                     troncon.getGeometry(), obj, session.getRepositoryForClass(BorneDigue.class));
             obj.setGeometry(structGeom);
@@ -957,9 +939,9 @@ public class TronconUtils {
         session.getRepositoryForClass(TronconDigue.class).update(troncon);
     }
 
-
     /**
-     * A function to switch SR of a given PR. Gives the new PR value in the target SR.
+     * A function to switch SR of a given PR. Gives the new PR value in the
+     * target SR.
      *
      * @param refLinear An array containing the segments of the reference linear
      * along wich one the distances are computed.
@@ -974,83 +956,81 @@ public class TronconUtils {
             final double initialPR,
             final SystemeReperage initialSR,
             final SystemeReperage targetSR,
-            final AbstractSIRSRepository<BorneDigue> borneRepo){
+            final AbstractSIRSRepository<BorneDigue> borneRepo) {
         ArgumentChecks.ensureNonNull("Reference linear", refLinear);
         ArgumentChecks.ensureNonNull("Initial SR", initialSR);
         ArgumentChecks.ensureNonNull("Target SR", targetSR);
         ArgumentChecks.ensureNonNull("Database connection", borneRepo);
 
-
         // Map des bornes du SR de saisie des PR/Z : la clef contient le PR des bornes dans le SR de saisi. La valeur contient l'id de la borne.
-        final Map.Entry<Float, String>[] orderedInitialSRBornes =
-                initialSR.systemeReperageBornes.stream().map((SystemeReperageBorne srBorne) ->{
-           return new HashMap.SimpleEntry<>(srBorne.getValeurPR(), srBorne.getBorneId());
-        }).sorted((Map.Entry<Float, String> first, Map.Entry<Float, String> second)-> {
+        final Map.Entry<Float, String>[] orderedInitialSRBornes
+                = initialSR.systemeReperageBornes.stream().map((SystemeReperageBorne srBorne) -> {
+                    return new HashMap.SimpleEntry<>(srBorne.getValeurPR(), srBorne.getBorneId());
+                }).sorted((Map.Entry<Float, String> first, Map.Entry<Float, String> second) -> {
                     return Float.compare(first.getKey(), second.getKey());// On trie suivant la valeurs des PR qui est en clef.
-                }).toArray((int size) -> {return new Map.Entry[size];});
+                }).toArray((int size) -> {
+                    return new Map.Entry[size];
+                });
 
         // On recherche les bornes entre lesquelles se situe le point à convertir, en se basant sur les PRs dans le SR de départ.
         Map.Entry<Float, String> nearestInitialSRBorne = orderedInitialSRBornes[0];
         Map.Entry<Float, String> followingInitialSRBorne = orderedInitialSRBornes[1];
         int borneCnt = 1;
-        while(++borneCnt<orderedInitialSRBornes.length && initialPR>orderedInitialSRBornes[borneCnt].getKey()){
-            nearestInitialSRBorne=orderedInitialSRBornes[borneCnt-1];
-            followingInitialSRBorne=orderedInitialSRBornes[borneCnt];
+        while (++borneCnt < orderedInitialSRBornes.length && initialPR > orderedInitialSRBornes[borneCnt].getKey()) {
+            nearestInitialSRBorne = orderedInitialSRBornes[borneCnt - 1];
+            followingInitialSRBorne = orderedInitialSRBornes[borneCnt];
         }
 
         // Calcul du ratio de distance du point à convertir, entre les deux bornes trouvées.
-        final double initialRatio = (initialPR-nearestInitialSRBorne.getKey())/(followingInitialSRBorne.getKey()-nearestInitialSRBorne.getKey());
+        final double initialRatio = (initialPR - nearestInitialSRBorne.getKey()) / (followingInitialSRBorne.getKey() - nearestInitialSRBorne.getKey());
 
         // Récupération des deux bornes.
         final BorneDigue nearestInitialSRBorneDigue = borneRepo.get(nearestInitialSRBorne.getValue());
         final BorneDigue followingInitialSRBorneDigue = borneRepo.get(followingInitialSRBorne.getValue());
 
         //Distance du point dont le PR est initialPr sur le troncon ?
-
         //=> distance de la nearestborne sur le troncon :
         final ProjectedPoint nearestInitialSRBorneProj = projectReference(refLinear, nearestInitialSRBorneDigue.getGeometry());
         //=> distance de la secondBorneDigue sur le troncon :
         final ProjectedPoint followingInitialSRBorneProj = projectReference(refLinear, followingInitialSRBorneDigue.getGeometry());
 
         //=> distance sur le troncon du point dont le PR est initialPR :
-        final double distanceOrigineTroncon = nearestInitialSRBorneProj.distanceAlongLinear + (followingInitialSRBorneProj.distanceAlongLinear - nearestInitialSRBorneProj.distanceAlongLinear)*initialRatio;
+        final double distanceOrigineTroncon = nearestInitialSRBorneProj.distanceAlongLinear + (followingInitialSRBorneProj.distanceAlongLinear - nearestInitialSRBorneProj.distanceAlongLinear) * initialRatio;
 
         // On parcourt les segments pour rechercher celui sur lequel se situe le point et à quelle distance sur ce segment.
         SegmentInfo bonSegment = null;
         double distanceSurLeBonSegment = distanceOrigineTroncon;
-        for (final SegmentInfo segmentInfo : refLinear){
-            if(segmentInfo.endDistance>distanceOrigineTroncon){
-                bonSegment = segmentInfo; break;
+        for (final SegmentInfo segmentInfo : refLinear) {
+            if (segmentInfo.endDistance > distanceOrigineTroncon) {
+                bonSegment = segmentInfo;
+                break;
             } else {
-                distanceSurLeBonSegment-=segmentInfo.length;
+                distanceSurLeBonSegment -= segmentInfo.length;
             }
         }
 
-        if(bonSegment!=null){
+        if (bonSegment != null) {
             // Calcul des coordonnées du point à convertir.
             final Point initialPointPR = GO2Utilities.JTS_FACTORY.createPoint(bonSegment.getPoint(distanceSurLeBonSegment, 0));
 
             // Conversion des coordonnées du point à convertir vers le SR demandé.
             return computePR(refLinear, targetSR, initialPointPR, borneRepo);
-        }
-        else{
+        } else {
             throw new SirsCoreRuntimeException("Unable to compute segment for the given PR and SRs.");
         }
     }
 
-
-
-
-
-
     /**
      * Compute PR value for the point referenced by input linear parameter.
      *
-     * @param refLinear Reference linear for bornes positions and relative distances.
+     * @param refLinear Reference linear for bornes positions and relative
+     * distances.
      * @param targetSR The system to express output PR into.
      * @param toGetPRFor the point we want to compute a PR for.
-     * @param borneRepo Database  connection to read {@link BorneDigue} objects referenced in target {@link SystemeReperage}.
-     * @return Value of the computed PR, or {@link Float#NaN} if we cannot compute any.
+     * @param borneRepo Database connection to read {@link BorneDigue} objects
+     * referenced in target {@link SystemeReperage}.
+     * @return Value of the computed PR, or {@link Float#NaN} if we cannot
+     * compute any.
      */
     public static float computePR(final SegmentInfo[] refLinear, final SystemeReperage targetSR, final Point toGetPRFor, final AbstractSIRSRepository<BorneDigue> borneRepo) {
         ArgumentChecks.ensureNonNull("Reference linear", refLinear);
@@ -1064,8 +1044,8 @@ public class TronconUtils {
 
         final ProjectedPoint prjPt = projectReference(refLinear, toGetPRFor);
 
-        final TreeMap<Double,SystemeReperageBorne> bornes = new TreeMap<>();
-        for(SystemeReperageBorne srb : targetSR.systemeReperageBornes){
+        final TreeMap<Double, SystemeReperageBorne> bornes = new TreeMap<>();
+        for (SystemeReperageBorne srb : targetSR.systemeReperageBornes) {
             final BorneDigue borne = borneRepo.get(srb.getBorneId());
             final ProjectedPoint projBorne = projectReference(refLinear, borne.getGeometry());
             bornes.put(projBorne.distanceAlongLinear, srb);
@@ -1112,7 +1092,7 @@ public class TronconUtils {
                 final double pr = underBorne.getValeurPR() + ratio * (prjPt.distanceAlongLinear - under.getKey());
                 return (float) pr;
             }
-        }else{
+        } else {
             if (under.equals(above)) {
                 //exactement sur le point.
                 return under.getValue().getValeurPR();
@@ -1133,12 +1113,16 @@ public class TronconUtils {
     /**
      * Recherche des bornes amont et aval les plus proches.
      *
-     * @param refLinear Segments constituant la polyligne sur laquelle effectuer la recherche.
+     * @param refLinear Segments constituant la polyligne sur laquelle effectuer
+     * la recherche.
      * @param targetSR Systeme de repérage cible.
-     * @param toGetPRFor Le point pour lequel on veut trouver les bornes amont / aval les plus proches.
-     * @param borneRepo Accesseur permettant de récupérer les bornes depuis la base de données.
-     * @return [0] distance à la borne en amont comme clé, Borne en amont comme valeur. Peut être nul.
-     *         [1] distance à la borne en aval comme clé, Borne en aval comme valeur. Peut être nul.
+     * @param toGetPRFor Le point pour lequel on veut trouver les bornes amont /
+     * aval les plus proches.
+     * @param borneRepo Accesseur permettant de récupérer les bornes depuis la
+     * base de données.
+     * @return [0] distance à la borne en amont comme clé, Borne en amont comme
+     * valeur. Peut être nul. [1] distance à la borne en aval comme clé, Borne
+     * en aval comme valeur. Peut être nul.
      */
     public static Map.Entry<Double, SystemeReperageBorne>[] findNearest(final SegmentInfo[] refLinear, final SystemeReperage targetSR, final Point toGetPRFor, final AbstractSIRSRepository<BorneDigue> borneRepo) {
         ArgumentChecks.ensureNonNull("Reference linear", refLinear);
@@ -1148,8 +1132,8 @@ public class TronconUtils {
 
         final ProjectedPoint prjPt = projectReference(refLinear, toGetPRFor);
 
-        final TreeMap<Double,SystemeReperageBorne> bornes = new TreeMap<>();
-        for(SystemeReperageBorne srb : targetSR.systemeReperageBornes){
+        final TreeMap<Double, SystemeReperageBorne> bornes = new TreeMap<>();
+        for (SystemeReperageBorne srb : targetSR.systemeReperageBornes) {
             final BorneDigue borne = borneRepo.get(srb.getBorneId());
             final ProjectedPoint projBorne = projectReference(refLinear, borne.getGeometry());
             bornes.put(projBorne.distanceAlongLinear, srb);
@@ -1158,18 +1142,19 @@ public class TronconUtils {
         Map.Entry<Double, SystemeReperageBorne> under = bornes.floorEntry(prjPt.distanceAlongLinear);
         Map.Entry<Double, SystemeReperageBorne> above = bornes.ceilingEntry(prjPt.distanceAlongLinear);
 
-        if(under!=null){
-            under = new AbstractMap.SimpleImmutableEntry(prjPt.distanceAlongLinear-under.getKey(),under.getValue());
+        if (under != null) {
+            under = new AbstractMap.SimpleImmutableEntry(prjPt.distanceAlongLinear - under.getKey(), under.getValue());
         }
-        if(above!=null){
-            above = new AbstractMap.SimpleImmutableEntry(above.getKey()-prjPt.distanceAlongLinear,above.getValue());
+        if (above != null) {
+            above = new AbstractMap.SimpleImmutableEntry(above.getKey() - prjPt.distanceAlongLinear, above.getValue());
         }
 
-        return new Map.Entry[]{under,above};
+        return new Map.Entry[]{under, above};
     }
 
     /**
      * Compute PR values (start and end point) for input {@link Positionable}.
+     *
      * @param targetPos The Positionable object to compute PR for.
      * @param session Connection to database, to retrieve SR and bornes.
      */
@@ -1207,7 +1192,7 @@ public class TronconUtils {
      * @param pr Valeur de PR pour lequel on veut trouver un point.
      * @return Le point calculé pour le PR donné.
      */
-    public static Point computeCoordinate(SystemeReperage sr, double pr){
+    public static Point computeCoordinate(SystemeReperage sr, double pr) {
         final TronconDigueRepository tronconRepo = InjectorCore.getBean(TronconDigueRepository.class);
         final BorneDigueRepository borneRepo = InjectorCore.getBean(BorneDigueRepository.class);
         final TronconDigue troncon = tronconRepo.get(sr.getLinearId());
@@ -1217,26 +1202,32 @@ public class TronconUtils {
         //on cherche les bornes les plus proche
         SystemeReperageBorne borneBasse = null;
         SystemeReperageBorne borneHaute = null;
-        for(SystemeReperageBorne srb : srbs){
-            if( (borneBasse==null || borneBasse.getValeurPR() < srb.getValeurPR() ) && srb.getValeurPR()<= pr){
+        for (SystemeReperageBorne srb : srbs) {
+            if ((borneBasse == null || borneBasse.getValeurPR() < srb.getValeurPR()) && srb.getValeurPR() <= pr) {
                 borneBasse = srb;
             }
-            if( (borneHaute==null || borneHaute.getValeurPR() > srb.getValeurPR() ) && srb.getValeurPR()>= pr){
+            if ((borneHaute == null || borneHaute.getValeurPR() > srb.getValeurPR()) && srb.getValeurPR() >= pr) {
                 borneHaute = srb;
             }
         }
 
-        if(borneBasse == null) borneBasse = borneHaute;
-        if(borneHaute == null) borneHaute = borneBasse;
-        if(borneBasse == null) return null;
+        if (borneBasse == null) {
+            borneBasse = borneHaute;
+        }
+        if (borneHaute == null) {
+            borneHaute = borneBasse;
+        }
+        if (borneBasse == null) {
+            return null;
+        }
 
         final Geometry linear = troncon.getGeometry();
         Point pt;
-        if(borneBasse == borneHaute){
+        if (borneBasse == borneHaute) {
             //une seule borne, on ne peut pas caluler la valeur réel des PR.
             final BorneDigue borne = borneRepo.get(borneBasse.getBorneId());
             pt = LinearReferencingUtilities.computeCoordinate(linear, borne.getGeometry(), 0.0, 0.0);
-        }else{
+        } else {
             final BorneDigue borne0 = borneRepo.get(borneBasse.getBorneId());
             final BorneDigue borne1 = borneRepo.get(borneHaute.getBorneId());
 
@@ -1246,10 +1237,10 @@ public class TronconUtils {
             final LinearReferencing.ProjectedPoint rel1 = LinearReferencingUtilities.projectReference(segments, borne1.getGeometry());
 
             //on converti le PR en distance le long du lineaire
-            final double diffPr = borneHaute.getValeurPR()-borneBasse.getValeurPR();
+            final double diffPr = borneHaute.getValeurPR() - borneBasse.getValeurPR();
             final double diffDist = rel1.distanceAlongLinear - rel0.distanceAlongLinear;
             final double ratio = (pr - borneBasse.getValeurPR()) / diffPr;
-            final double distance = ratio*diffDist;
+            final double distance = ratio * diffDist;
 
             pt = LinearReferencingUtilities.computeCoordinate(linear, borne0.getGeometry(), distance, 0.0);
         }
@@ -1261,14 +1252,16 @@ public class TronconUtils {
     }
 
     /**
-     * Calcul de la position avec un systeme de reperage, une borne et une distance.
+     * Calcul de la position avec un systeme de reperage, une borne et une
+     * distance.
      *
      * @param sr Système de repérage à utiliser pour le calcul.
      * @param srBorne borne de référence pour le point à calculer.
-     * @param distance Distance du point à la borne (négatif si le point est en amont).
+     * @param distance Distance du point à la borne (négatif si le point est en
+     * amont).
      * @return Le point calculé pour les paramètres linéaires donnés.
      */
-    public static Point computeCoordinate(SystemeReperage sr, SystemeReperageBorne srBorne, double distance){
+    public static Point computeCoordinate(SystemeReperage sr, SystemeReperageBorne srBorne, double distance) {
         final TronconDigueRepository tronconRepo = InjectorCore.getBean(TronconDigueRepository.class);
         final BorneDigueRepository borneRepo = InjectorCore.getBean(BorneDigueRepository.class);
 
@@ -1289,12 +1282,14 @@ public class TronconUtils {
      *
      * @param borneId Identifiant de la borne de référence.
      * @param distance Distance entre la borne et le point à calculer.
-     * @param amontAval Vrai si la borne est en aval du point, faux si le point à calculer est en aval de la borne.
+     * @param amontAval Vrai si la borne est en aval du point, faux si le point
+     * à calculer est en aval de la borne.
      * @param tronconSegments Segments composant le tronçon cible.
-     * @param borneRepo Permet de récupérer les bornes depuis la base de données.
+     * @param borneRepo Permet de récupérer les bornes depuis la base de
+     * données.
      * @return Le point calculé pour les paramètres linéaires donnés.
      */
-    public static Point getPointFromBorne(final String borneId, final double distance, final boolean amontAval, final SegmentInfo[] tronconSegments, final AbstractSIRSRepository<BorneDigue> borneRepo){
+    public static Point getPointFromBorne(final String borneId, final double distance, final boolean amontAval, final SegmentInfo[] tronconSegments, final AbstractSIRSRepository<BorneDigue> borneRepo) {
         final Point bornePoint = borneRepo.get(borneId).getGeometry();
         double dist = distance;
         if (amontAval) {
@@ -1316,16 +1311,17 @@ public class TronconUtils {
      * @param geometry La géométrie pour laquelle on veut extraire un point.
      * @param linearSegments Les segments constituant la polyligne de référence.
      * @param crs La projection à utiliser pour la géométrie de sortie.
-     * @param endPoint Vrai si le dernier point de la géométrie doit être retourné, faux si c'est le premier point.
+     * @param endPoint Vrai si le dernier point de la géométrie doit être
+     * retourné, faux si c'est le premier point.
      * @return Le premier ou dernier point de la géométrie en entrée.
      */
     public static Point getPointFromGeometry(Geometry geometry, final SegmentInfo[] linearSegments, final CoordinateReferenceSystem crs, final boolean endPoint) {
-        if(!(geometry instanceof LineString) && linearSegments != null) {
+        if (!(geometry instanceof LineString) && linearSegments != null) {
             geometry = LinearReferencing.project(linearSegments, geometry);
         }
         final Coordinate[] coords = geometry.getCoordinates();
         // Which point : first or last ?
-        final int index = endPoint ? coords.length-1 : 0;
+        final int index = endPoint ? coords.length - 1 : 0;
         final Point point = GO2Utilities.JTS_FACTORY.createPoint(new Coordinate(coords[index]));
         if (crs != null) {
             JTS.setCRS(point, crs);
@@ -1334,7 +1330,8 @@ public class TronconUtils {
     }
 
     /**
-     * Utility object for manipulation of spatial information of a {@link Positionable} object.
+     * Utility object for manipulation of spatial information of a
+     * {@link Positionable} object.
      */
     public static final class PosInfo {
 
@@ -1345,7 +1342,7 @@ public class TronconUtils {
         private SegmentInfo[] linearSegments;
 
         public PosInfo(Positionable pos) {
-            this(pos,null);
+            this(pos, null);
         }
 
         public PosInfo(Positionable pos, TronconDigue troncon) {
@@ -1371,7 +1368,8 @@ public class TronconUtils {
 
         /**
          *
-         * @return Identifier of the {@link TronconDigue} on which this object is placed.
+         * @return Identifier of the {@link TronconDigue} on which this object
+         * is placed.
          */
         public String getTronconId() {
             String tdId = null;
@@ -1399,15 +1397,19 @@ public class TronconUtils {
                 }
             }
 
-            if (troncon != null)
+            if (troncon != null) {
                 return troncon.getId();
-            else
+            } else {
                 return tdId;
+            }
         }
 
         /**
-         * Try to retrieve {@link TronconDigue} on which thee current Positionable is defined.
-         * @return Troncon of the object, or null if we cannot retrieve it (no valid SR).
+         * Try to retrieve {@link TronconDigue} on which thee current
+         * Positionable is defined.
+         *
+         * @return Troncon of the object, or null if we cannot retrieve it (no
+         * valid SR).
          */
         public TronconDigue getTroncon() {
             if (troncon != null) {
@@ -1427,12 +1429,13 @@ public class TronconUtils {
         }
 
         /**
-         * Return the geometry object associated to the {@link TronconDigue} bound to
-         * the positionable.
+         * Return the geometry object associated to the {@link TronconDigue}
+         * bound to the positionable.
+         *
          * @return geometry of this object {@link TronconDigue}.
          */
         public LineString getTronconLinear() {
-            if(linear==null) {
+            if (linear == null) {
                 if (getTroncon() != null) {
                     linear = asLineString(getTroncon().getGeometry());
                 }
@@ -1446,6 +1449,7 @@ public class TronconUtils {
 
         /**
          * Succession of segments which compose the geometry of the tronçon.
+         *
          * @param forceRefresh True if we want to reload tronçon geometry from
          * database, false if we want to get it from cache.
          * @return An ordered list of the segments of current tronçon.
@@ -1453,8 +1457,9 @@ public class TronconUtils {
         public SegmentInfo[] getTronconSegments(final boolean forceRefresh) {
             if (linearSegments == null || forceRefresh) {
                 final LineString tmpLinear = asLineString(getTronconLinear());
-                if (tmpLinear != null)
-                        linearSegments = buildSegments(tmpLinear);
+                if (tmpLinear != null) {
+                    linearSegments = buildSegments(tmpLinear);
+                }
             }
             return linearSegments;
         }
@@ -1464,8 +1469,9 @@ public class TronconUtils {
         }
 
         /**
-         * Get input Positionable start point in native CRS. If it does not exist,
-         * it's computed from linear position of the Positionable.
+         * Get input Positionable start point in native CRS. If it does not
+         * exist, it's computed from linear position of the Positionable.
+         *
          * @return A point, never null.
          * @throws IllegalStateException If we cannot get nor compute any point.
          */
@@ -1489,19 +1495,24 @@ public class TronconUtils {
         }
 
         /**
-         * Get input Positionable start point, reprojected in given CRS. If it does not exist,
-         * it's computed from linear position of the Positionable.
-         * @param crs projection to use for output point. If null, database projection is used.
+         * Get input Positionable start point, reprojected in given CRS. If it
+         * does not exist, it's computed from linear position of the
+         * Positionable.
+         *
+         * @param crs projection to use for output point. If null, database
+         * projection is used.
          * @return A point, never null.
-         * @throws org.opengis.util.FactoryException If we cannot access Referencing module.
+         * @throws org.opengis.util.FactoryException If we cannot access
+         * Referencing module.
          * @throws IllegalStateException If we cannot get nor compute any point.
-         * @throws org.opengis.referencing.operation.TransformException if an error happens during reprojecction.
+         * @throws org.opengis.referencing.operation.TransformException if an
+         * error happens during reprojecction.
          */
         public Point getGeoPointStart(CoordinateReferenceSystem crs) throws
-                FactoryException, MismatchedDimensionException, TransformException{
+                FactoryException, MismatchedDimensionException, TransformException {
             Point point = getGeoPointStart();
             final CoordinateReferenceSystem geomCrs = JTS.findCoordinateReferenceSystem(point);
-            if(crs!=null && !Utilities.equalsIgnoreMetadata(geomCrs,crs)){
+            if (crs != null && !Utilities.equalsIgnoreMetadata(geomCrs, crs)) {
                 final CoordinateOperation trs = CRS.findOperation(geomCrs, crs, null);
                 point = (Point) JTS.transform(point, trs.getMathTransform());
             }
@@ -1509,27 +1520,32 @@ public class TronconUtils {
         }
 
         /**
-         * Calcule un point à partir de l'information sur la distance à une borne.
+         * Calcule un point à partir de l'information sur la distance à une
+         * borne.
+         *
          * @param borneId identifiant de la borne de réference.
          * @param distance Distance entre la borne et le point à calculer.
-         * @param amontAval - Vrai si la borne est en aval du point, faux si le point à calculer est en aval de la borne.
+         * @param amontAval - Vrai si la borne est en aval du point, faux si le
+         * point à calculer est en aval de la borne.
          * @return Le point calculé pour les paramètres linéaires donnés.
          */
-        private Point getPointFromBorne(final String borneId, final double distance, final boolean amontAval){
+        private Point getPointFromBorne(final String borneId, final double distance, final boolean amontAval) {
             return TronconUtils.getPointFromBorne(borneId, distance, amontAval, getTronconSegments(false), session.getRepositoryForClass(BorneDigue.class));
         }
 
         /**
-         * @param endPoint True if we want end point of the geometry, false if we need its start position.
+         * @param endPoint True if we want end point of the geometry, false if
+         * we need its start position.
          * @return End point or start point of this positionable geometry.
          */
-        private Point getPointFromGeometry(final boolean endPoint){
+        private Point getPointFromGeometry(final boolean endPoint) {
             return TronconUtils.getPointFromGeometry(pos.getGeometry(), getTronconSegments(false), session.getProjection(), endPoint);
         }
 
         /**
          * Get input Positionable end point in native CRS. If it does not exist,
          * it's computed from linear position of the Positionable.
+         *
          * @return A point, never null.
          * @throws IllegalStateException If we cannot get nor compute any point.
          */
@@ -1552,19 +1568,24 @@ public class TronconUtils {
         }
 
         /**
-         * Get input Positionable end point, reprojected in given CRS. If it does not exist,
-         * it's computed from linear position of the Positionable.
-         * @param crs projection to use for output point. If null, database projection is used.
+         * Get input Positionable end point, reprojected in given CRS. If it
+         * does not exist, it's computed from linear position of the
+         * Positionable.
+         *
+         * @param crs projection to use for output point. If null, database
+         * projection is used.
          * @return A point, never null.
-         * @throws org.opengis.util.FactoryException If we cannot access Referencing module.
+         * @throws org.opengis.util.FactoryException If we cannot access
+         * Referencing module.
          * @throws IllegalStateException If we cannot get nor compute any point.
-         * @throws org.opengis.referencing.operation.TransformException if an error happens during reprojecction.
+         * @throws org.opengis.referencing.operation.TransformException if an
+         * error happens during reprojecction.
          */
         public Point getGeoPointEnd(CoordinateReferenceSystem crs) throws
                 FactoryException, TransformException {
             Point point = getGeoPointEnd();
             final CoordinateReferenceSystem geomCrs = JTS.findCoordinateReferenceSystem(point);
-            if(crs!=null && !Utilities.equalsIgnoreMetadata(geomCrs,crs)){
+            if (crs != null && !Utilities.equalsIgnoreMetadata(geomCrs, crs)) {
                 final CoordinateOperation trs = CRS.findOperation(geomCrs, crs, null);
                 point = (Point) JTS.transform(point, trs.getMathTransform());
             }
@@ -1573,14 +1594,18 @@ public class TronconUtils {
 
         public PosSR getForSR() {
             String srid = pos.getSystemeRepId();
-            if(srid==null){
+            if (srid == null) {
                 //On utilise le SR du troncon
                 srid = getTroncon().getSystemeRepDefautId();
-                if(srid==null) return new PosSR();
+                if (srid == null) {
+                    return new PosSR();
+                }
                 final SystemeReperage sr = session.getRepositoryForClass(SystemeReperage.class).get(srid);
-                if(sr==null) return new PosSR();
+                if (sr == null) {
+                    return new PosSR();
+                }
                 return getForSR(sr);
-            }else{
+            } else {
                 //valeur deja présente
                 final PosSR possr = new PosSR();
                 possr.srid = srid;
@@ -1609,10 +1634,10 @@ public class TronconUtils {
 
             final List<BorneDigue> bornes = new ArrayList<>();
             final List<Point> references = new ArrayList<>();
-            for(SystemeReperageBorne srb : sr.systemeReperageBornes){
+            for (SystemeReperageBorne srb : sr.systemeReperageBornes) {
                 final String bid = srb.getBorneId();
                 final BorneDigue bd = session.getRepositoryForClass(BorneDigue.class).get(bid);
-                if(bd!=null){
+                if (bd != null) {
                     bornes.add(bd);
                     references.add(bd.getGeometry());
                 }
@@ -1638,7 +1663,8 @@ public class TronconUtils {
         /**
          * @return geometry of the input positionable. If it has no geometry,
          * it's computed and affected to the positionable object. If we cannot
-         * deduce a geometry (no linear associated, etc.), a null value is returned.
+         * deduce a geometry (no linear associated, etc.), a null value is
+         * returned.
          */
         public Geometry getGeometry() {
             Geometry geometry = pos.getGeometry();
@@ -1654,9 +1680,42 @@ public class TronconUtils {
             }
             return geometry;
         }
+
+        /**
+         * Mise à jour du positionable en attribut à partir de coordonnées
+         * linéaires calculées pour un SR donné.
+         *
+         *
+         * @param posSR : instance de la classe PosSR portant les coordonnées
+         * linéaires calculées.
+         */
+        public void setPosSRToPositionable(PosSR posSR) {
+            ArgumentChecks.ensureNonNull("Positionable pos", pos);
+            ArgumentChecks.ensureNonNull("PosSR posSR", posSR);
+            ArgumentChecks.ensureNonEmpty("Système de Représentation posSR.srid", posSR.srid);
+
+            // Affectation des coordonnées linéaires calculées au Positionable :
+            
+            //Système de représentation :
+            if (!posSR.srid.equals(pos.getSystemeRepId())) {
+                pos.setSystemeRepId(posSR.srid);
+            }
+
+            //point de départ
+            pos.setBorneDebutId(posSR.borneStartId);
+            pos.setBorne_debut_distance(posSR.distanceStartBorne);
+            pos.setBorne_debut_aval(posSR.startAval);
+
+            //point de fin
+            pos.setBorneFinId(posSR.borneEndId);
+            pos.setBorne_fin_distance(posSR.distanceEndBorne);
+            pos.setBorne_fin_aval(posSR.endAval);
+
+        }
     }
 
-    public static final class PosSR{
+    public static final class PosSR {
+
         public String srid = "";
 
         public BorneDigue borneDigueStart;

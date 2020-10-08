@@ -110,6 +110,8 @@ public class FXReseauFermePrintPane extends TemporalTronconChoicePrintPane {
         uiOptionDebutArchive.valueProperty().addListener(parameterListener);
         uiOptionFinArchive.valueProperty().addListener(parameterListener);
 
+        uiPrestationPredicater.uiOptionPrestation.selectedProperty().addListener(parameterListener);
+
         uiCountProgress.setVisible(false);
         updateCount(null);
     }
@@ -142,10 +144,12 @@ public class FXReseauFermePrintPane extends TemporalTronconChoicePrintPane {
 
     private Stream<ReseauHydrauliqueFerme> getData() {
         final Predicate userOptions = new TypeConduitePredicate()
+                .and(ReseauHydrauliqueFerme::getValid) // On n'autorise à l'impression uniquement les éléments valides valides.
                 .and(new TemporalPredicate())
                 .and(new LinearPredicate<>())
                 // /!\ It's important that pr filtering is done AFTER linear filtering.
-                .and(new PRPredicate<>());
+                .and(new PRPredicate<>())
+                .and(uiPrestationPredicater.getPredicate());
 
         final CloseableIterator<ReseauHydrauliqueFerme> it = Injector.getSession()
                 .getRepositoryForClass(ReseauHydrauliqueFerme.class)
@@ -155,6 +159,7 @@ public class FXReseauFermePrintPane extends TemporalTronconChoicePrintPane {
         final Spliterator<ReseauHydrauliqueFerme> split = Spliterators.spliteratorUnknownSize(it, 0);
         final Stream dataStream = StreamSupport.stream(split, false)
                 .filter(userOptions);
+//                .peek(p -> ConvertPositionableCoordinates.COMPUTE_MISSING_COORD.test((Positionable) p));
 
         dataStream.onClose(() -> it.close());
         ClosingDaemon.watchResource(dataStream, it);
@@ -174,20 +179,19 @@ public class FXReseauFermePrintPane extends TemporalTronconChoicePrintPane {
         });
 
         uiCountProgress.visibleProperty().bind(t.runningProperty());
-        t.setOnRunning(evt -> Platform.runLater(() -> {
-            uiCountLabel.setText(null);
-        }));
+        t.setOnRunning(evt -> uiCountLabel.setText(null));
 
-        t.setOnSucceeded(evt -> Platform.runLater(() -> {
-            uiCountLabel.setText(String.valueOf(t.getValue()));
-        }));
+        t.setOnSucceeded(evt -> uiCountLabel.setText(String.valueOf(t.getValue())));
 
-        t.setOnFailed(evt -> Platform.runLater(() -> {
-            new Growl(Growl.Type.ERROR, "Impossible de déterminer le nombre de réseaux à imprimer.").showAndFade();
-        }));
+        t.setOnFailed(evt -> new Growl(Growl.Type.ERROR, "Impossible de déterminer le nombre de réseaux à imprimer.").showAndFade());
 
         countTask.set(t);
         TaskManager.INSTANCE.submit(t);
+    }
+
+    @Override
+    protected InvalidationListener getParameterListener() {
+        return parameterListener;
     }
 
     private class TypeConduitePredicate implements Predicate<ReseauHydrauliqueFerme> {

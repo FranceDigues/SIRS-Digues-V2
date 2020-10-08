@@ -23,7 +23,7 @@ import fr.sirs.SIRS;
 import fr.sirs.Injector;
 import fr.sirs.core.component.*;
 import fr.sirs.core.model.*;
-import fr.sirs.util.javafx.FloatSpinnerValueFactory;
+import javafx.beans.property.ObjectProperty;
 
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
@@ -38,19 +38,20 @@ import javafx.scene.layout.VBox;
  * @author Olivier Nouguier (Geomatys)
  * @author Alexis Manin (Geomatys)
  * @author Samuel Andrés (Geomatys)
+ * @author Matthieu Bastianelli (Geomatys)
  */
 public class FXSystemeEndiguementPane extends AbstractFXElementPane<SystemeEndiguement> {
 
     private final Previews previewRepository;
 
-    private final DiguePojoTable table = new DiguePojoTable();
+    private final DiguePojoTable table;
 
     // Propriétés de SystemeEndiguement
     @FXML TextArea ui_commentaire;
     @FXML TextField ui_libelle;
     @FXML Spinner ui_populationProtegee;
     @FXML TextField ui_classement;
-    @FXML Spinner ui_niveauProtection;
+    @FXML TextField ui_niveauProtection;
     @FXML ComboBox ui_gestionnaireDecretId;
     @FXML Button ui_gestionnaireDecretId_link;
     @FXML ComboBox ui_gestionnaireTechniqueId;
@@ -77,8 +78,6 @@ public class FXSystemeEndiguementPane extends AbstractFXElementPane<SystemeEndig
         ui_populationProtegee.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, Integer.MAX_VALUE));
         ui_classement.disableProperty().bind(disableFieldsProperty());
         ui_niveauProtection.disableProperty().bind(disableFieldsProperty());
-        ui_niveauProtection.setEditable(true);
-        ui_niveauProtection.setValueFactory(new FloatSpinnerValueFactory(0, Float.MAX_VALUE));
         ui_gestionnaireDecretId.disableProperty().bind(disableFieldsProperty());
         ui_gestionnaireDecretId_link.disableProperty().bind(ui_gestionnaireDecretId.getSelectionModel().selectedItemProperty().isNull());
         ui_gestionnaireDecretId_link.setGraphic(new ImageView(SIRS.ICON_LINK));
@@ -87,6 +86,9 @@ public class FXSystemeEndiguementPane extends AbstractFXElementPane<SystemeEndig
         ui_gestionnaireTechniqueId_link.disableProperty().bind(ui_gestionnaireTechniqueId.getSelectionModel().selectedItemProperty().isNull());
         ui_gestionnaireTechniqueId_link.setGraphic(new ImageView(SIRS.ICON_LINK));
         ui_gestionnaireTechniqueId_link.setOnAction((ActionEvent e)->Injector.getSession().showEditionTab(ui_gestionnaireTechniqueId.getSelectionModel().getSelectedItem()));
+
+
+        table = new DiguePojoTable(elementProperty());
     }
 
     public FXSystemeEndiguementPane(final SystemeEndiguement systemeEndiguement){
@@ -112,13 +114,14 @@ public class FXSystemeEndiguementPane extends AbstractFXElementPane<SystemeEndig
             ui_populationProtegee.getValueFactory().valueProperty().unbindBidirectional(oldElement.populationProtegeeProperty());
             ui_classement.textProperty().unbindBidirectional(oldElement.classementProperty());
 
-            ui_niveauProtection.getValueFactory().valueProperty().unbindBidirectional(oldElement.niveauProtectionProperty());
+            ui_niveauProtection.textProperty().unbindBidirectional(oldElement.niveauProtectionProperty());
         }
 
         if (newElement == null) {
             ui_libelle.setText(null);
             ui_commentaire.setText(null);
             ui_classement.setText(null);
+            ui_niveauProtection.setText(null);
             table.setTableItems(null);
 
         } else {
@@ -137,7 +140,7 @@ public class FXSystemeEndiguementPane extends AbstractFXElementPane<SystemeEndig
             // * classement
             ui_classement.textProperty().bindBidirectional(newElement.classementProperty());
             // * niveauProtection
-            ui_niveauProtection.getValueFactory().valueProperty().bindBidirectional(newElement.niveauProtectionProperty());
+            ui_niveauProtection.textProperty().bindBidirectional(newElement.niveauProtectionProperty());
 
             table.setTableItems(() -> (ObservableList) SIRS.observableList(
                     ((DigueRepository) session.getRepositoryForClass(Digue.class)).getBySystemeEndiguement(newElement)));
@@ -176,8 +179,8 @@ public class FXSystemeEndiguementPane extends AbstractFXElementPane<SystemeEndig
 
     private class DiguePojoTable extends PojoTable {
 
-        public DiguePojoTable() {
-            super(Digue.class, "Digues du système d'endiguement");
+        public DiguePojoTable(final ObjectProperty<? extends Element> container) {
+            super(Digue.class, "Digues du système d'endiguement", container);
             createNewProperty.set(false);
             fichableProperty.set(false);
             uiAdd.setVisible(false);

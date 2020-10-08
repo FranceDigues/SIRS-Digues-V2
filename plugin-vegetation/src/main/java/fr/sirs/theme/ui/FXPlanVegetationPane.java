@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -24,6 +24,7 @@ import fr.sirs.Session;
 import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.component.AbstractZoneVegetationRepository;
 import fr.sirs.core.component.ParcelleVegetationRepository;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.InvasiveVegetation;
 import fr.sirs.core.model.ParamCoutTraitementVegetation;
 import fr.sirs.core.model.ParamFrequenceTraitementVegetation;
@@ -43,6 +44,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
@@ -60,7 +62,7 @@ import org.geotoolkit.gui.javafx.util.FXListTableCell;
 
 /**
  * Panneau de paramétrage du plan, ouvert lors de la sélection d'un plan dans la liste proposée au chemin suivant :
- * 
+ *
  * "Plan de gestion" > "paramétrage"
  *
  * @author Johann Sorel (Geomatys)
@@ -184,7 +186,7 @@ public class FXPlanVegetationPane extends BorderPane {
         ////////////////////////////////////////////////////////////////////////
         // Construction des résumés des traitements planifiés sur les zones.
         ////////////////////////////////////////////////////////////////////////
-        uiFrequenceTable = new ParamPojoTable("Paramétrage des traitements de zones");
+        uiFrequenceTable = new ParamPojoTable("Paramétrage des traitements de zones", (ObjectProperty<? extends Element>) null);
         boolean costListModified=false, frequencyListModified=false;
         final List<ParamFrequenceTraitementVegetation> frequencesDuPlan = new ArrayList<>(plan.paramFrequence);
         final List<ParamCoutTraitementVegetation> coutsDuPlan = new ArrayList<>(plan.paramCout);
@@ -295,7 +297,7 @@ public class FXPlanVegetationPane extends BorderPane {
         ////////////////////////////////////////////////////////////////////////
         // Construction des paramètes de coûts.
         ////////////////////////////////////////////////////////////////////////
-        uiCoutTable = new PojoTable(ParamCoutTraitementVegetation.class, "Paramétrage des coûts des traitements");
+        uiCoutTable = new PojoTable(ParamCoutTraitementVegetation.class, "Paramétrage des coûts des traitements", (ObjectProperty<? extends Element>) null);
         uiCoutTable.setTableItems(() -> (ObservableList) plan.paramCout);
         uiCoutTable.commentAndPhotoProperty().set(false);
         uiCoutTable.openEditorOnNewProperty().set(false);
@@ -339,8 +341,8 @@ public class FXPlanVegetationPane extends BorderPane {
         private final List<Class<? extends ZoneVegetation>> vegetationClasses;
         private final SirsStringConverter converter = new SirsStringConverter();
 
-        public ParamPojoTable(String title) {
-            super(ParamFrequenceTraitementVegetation.class, title);
+        public ParamPojoTable(String title, final ObjectProperty<? extends Element> container) {
+            super(ParamFrequenceTraitementVegetation.class, title, container, false);
 
             // On garde les classes de zones de végétation.
             vegetationClasses = zoneVegetationClasses();
@@ -350,6 +352,9 @@ public class FXPlanVegetationPane extends BorderPane {
             });
             classColumn.setCellFactory(param -> new FXListTableCell<>(vegetationClasses, converter));
             getTable().getColumns().add(3, (TableColumn) classColumn);
+            
+            applyPreferences();
+            listenPreferences();
         }
     }
 }

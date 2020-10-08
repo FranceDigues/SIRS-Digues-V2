@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -22,6 +22,7 @@ import fr.sirs.core.SirsCore;
 import fr.sirs.core.SirsDBInfo;
 import fr.sirs.core.component.DatabaseRegistry;
 import fr.sirs.maj.ModuleChecker;
+import fr.sirs.util.property.SirsPreferences;
 import java.awt.Color;
 import java.io.IOException;
 import java.util.logging.Level;
@@ -32,7 +33,9 @@ import javafx.concurrent.Task;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.Tooltip;
@@ -55,15 +58,14 @@ import org.geotoolkit.internal.GeotkFX;
  */
 public class SynchronizationColumn extends TableColumn<String, Task> {
 
-    public static final Image ICON_SYNCHRO_STOPPED = SwingFXUtils.toFXImage(IconBuilder.createImage(
+    private static final Image ICON_SYNCHRO_STOPPED = SwingFXUtils.toFXImage(IconBuilder.createImage(
             FontAwesomeIcons.ICON_EXCHANGE, 16, new Color(130, 0, 0)), null);
 
-    public static final Image ICON_SYNCHRO_RUNNING = SwingFXUtils.toFXImage(IconBuilder.createImage(
+    private static final Image ICON_SYNCHRO_RUNNING = SwingFXUtils.toFXImage(IconBuilder.createImage(
             FontAwesomeIcons.ICON_EXCHANGE, 16, Color.GREEN), null);
 
-    public static final Tooltip PAUSE_SYNCHRO = new Tooltip("Passer en mode hors-ligne.");
-    public static final Tooltip RESUME_SYNCHRO = new Tooltip("Reprendre la synchronisation automatique.");
-    public static final Tooltip ERROR_SYNCHRO = new Tooltip("Impossible de retrouver l'état de synchronisation.");
+    private static final Tooltip PAUSE_SYNCHRO = new Tooltip("Passer en mode hors-ligne.");
+    private static final Tooltip RESUME_SYNCHRO = new Tooltip("Reprendre la synchronisation automatique.");
 
     private final DatabaseRegistry dbRegistry;
 
@@ -79,17 +81,22 @@ public class SynchronizationColumn extends TableColumn<String, Task> {
         dbRegistry = registry;
 
         setCellValueFactory((CellDataFeatures<String, Task> param) -> {
+
+            // récupération du nom local de la base
             final String dbName = param.getValue();
             if (dbName == null || dbName.isEmpty()) {
                 return null;
             } else {
+
+                final String dbUrl = SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR) + dbName;
+
                 try {
-                    if (dbRegistry.getSynchronizationTasks(dbName).count() > 0) {
-                        return new SimpleObjectProperty<>(new StopSync(dbName));
+                    if (dbRegistry.getSynchronizationTasks(dbUrl).count() > 0) {
+                        return new SimpleObjectProperty<>(new StopSync(dbUrl));
                     } else {
-                        final String remoteName = dbRegistry.getInfo(dbName).orElse(new SirsDBInfo()).getRemoteDatabase();
+                        final String remoteName = dbRegistry.getInfo(dbUrl).orElse(new SirsDBInfo()).getRemoteDatabase();
                         if (remoteName != null) {
-                            return new SimpleObjectProperty<>(new ResumeSync(dbName, remoteName));
+                            return new SimpleObjectProperty<>(new ResumeSync(dbUrl, remoteName));
                         }
                     }
                 } catch (IOException ex) {
@@ -113,7 +120,14 @@ public class SynchronizationColumn extends TableColumn<String, Task> {
             button.setPadding(Insets.EMPTY);
 
             button.setOnAction(evt -> {
-                updateState();
+                final Alert ask = new Alert(Alert.AlertType.CONFIRMATION,
+                        "Êtes-vous sûr de vouloir reprendre/arrêter la synchronisation automatique?",
+                        ButtonType.YES, ButtonType.NO);
+                ask.setResizable(true);
+                final ButtonType choice = ask.showAndWait().orElse(ButtonType.NO);
+                if (ButtonType.YES.equals(choice)) {
+                    updateState();
+                }
             });
         }
 
@@ -142,11 +156,11 @@ public class SynchronizationColumn extends TableColumn<String, Task> {
 
         private void updateState() {
             final Task t = getItem();
-            t.setOnFailed(evt -> Platform.runLater(() -> 
+            t.setOnFailed(evt -> Platform.runLater(() ->
                 GeotkFX.newExceptionDialog("Mise à jour de la synchronisation impossible.", t.getException()).show()
             ));
 
-            t.setOnSucceeded(evt -> Platform.runLater(() -> 
+            t.setOnSucceeded(evt -> Platform.runLater(() ->
                    updateItem((Task)t.getValue(), false)
             ));
 
@@ -175,19 +189,19 @@ public class SynchronizationColumn extends TableColumn<String, Task> {
      */
     private class StopSync extends Task<ResumeSync> {
 
-        private final String dbName;
+        private final String localDb;
 
-        public StopSync(final String dbName) {
-            this.dbName = dbName;
+        public StopSync(final String localDb) {
+            this.localDb = localDb;
             updateTitle("Arrêt de la synchronisation");
         }
 
         @Override
         public ResumeSync call() throws Exception {
-            dbRegistry.cancelAllSynchronizations(dbName);
-            final String remoteDatabase = dbRegistry.getInfo(dbName).orElse(new SirsDBInfo()).getRemoteDatabase();
+            dbRegistry.cancelAllSynchronizations(localDb);
+            final String remoteDatabase = dbRegistry.getInfo(localDb).orElse(new SirsDBInfo()).getRemoteDatabase();
             if (remoteDatabase != null) {
-                return new ResumeSync(dbName, remoteDatabase);
+                return new ResumeSync(localDb, remoteDatabase);
             } else {
                 return null;
             }
@@ -200,17 +214,17 @@ public class SynchronizationColumn extends TableColumn<String, Task> {
      */
     private class ResumeSync extends Task<StopSync> {
 
-        private final String dbName;
-        private final String remoteName;
+        private final String localDb;
+        private final String remoteDb;
 
         /**
          *
-         * @param dbName Main database.
-         * @param remoteName Remote database to synchronize with.
+         * @param localDb base de données locale à synchroniser
+         * @param remoteDb base de données à laquelle synchroniser la base locale
          */
-        public ResumeSync(final String dbName, final String remoteName) {
-            this.dbName = dbName;
-            this.remoteName = remoteName;
+        public ResumeSync(final String localDb, final String remoteDb) {
+            this.localDb = localDb;
+            this.remoteDb = remoteDb;
             updateTitle("Reprise de la synchronisation");
         }
 
@@ -218,24 +232,25 @@ public class SynchronizationColumn extends TableColumn<String, Task> {
         public StopSync call() throws Exception {
             final ChangeListener<String> msgListener = (obs, oldMsg, newMsg) -> updateMessage(newMsg);
             // First, we ensure that local database is up to date with installed modules.
-            final ModuleChecker modCheck = new ModuleChecker(dbRegistry, dbName);
+            final ModuleChecker modCheck = new ModuleChecker(dbRegistry, localDb);
             Platform.runLater(() -> modCheck.messageProperty().addListener(msgListener));
 
             modCheck.run();
             // Local database is up to date.
             if (modCheck.get()) {
                 // Now, we must ensure that local AND distant database are based on same module versions.
-                final DatabaseRegistry remoteRegistry = new DatabaseRegistry(remoteName);
-                final ModuleChecker modCheck2 = new ModuleChecker(remoteRegistry, remoteName);
+                final DatabaseRegistry remoteRegistry = new DatabaseRegistry(remoteDb);
+                final ModuleChecker modCheck2 = new ModuleChecker(remoteRegistry, remoteDb);
                 Platform.runLater(() -> modCheck2.messageProperty().addListener(msgListener));
                 modCheck2.run();
                 if (modCheck2.get()) {
-                    dbRegistry.synchronizeSirsDatabases(remoteName, dbName, true);
-                    return new StopSync(dbName);
+                    dbRegistry.synchronizeSirsDatabases(remoteDb, localDb, true);
+                    return new StopSync(localDb);
                 }
             }
 
-            throw new IllegalStateException("Impossible de synchroniser les bases de données, car les versions de certains modules installés ne sont pas compatibles avec les versions utilisées par la base distante.");
+            throw new IllegalStateException("Impossible de synchroniser les bases de données, car les versions de "
+                    + "certains modules installés ne sont pas compatibles avec les versions utilisées par la base distante.");
         }
     }
 }

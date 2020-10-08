@@ -124,7 +124,7 @@ Component hierarchy for FXParameterGroupPane should be :
     -fx-label-padding: 4;
 }
 
-//TREETABLE PARAMETERS EDITOR
+/*TREETABLE PARAMETERS EDITOR
 
 .tree-table-cell {
     -fx-border-width:0;

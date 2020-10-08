@@ -134,9 +134,21 @@ public class ConvertGeomToTronconHandler extends AbstractNavigationHandler {
         @Override
         public void mousePressed(final MouseEvent e) {
             final GraphicVisitor visitor = new AbstractGraphicVisitor() {
+                private boolean stopRequest = false;
+                
+                @Override
+                public boolean isStopRequested(){
+                    return stopRequest;
+                }
+                
+                @Override
+                public void endVisit(){
+                    stopRequest = true;
+                }
 
                 @Override
                 public void visit(ProjectedFeature feature, RenderingContext2D context, SearchAreaJ2D area) {
+                    if (stopRequest) stopRequest = false;
                     final Feature f = feature.getCandidate();
                     Geometry geom = (Geometry) f.getDefaultGeometryProperty().getValue();
 
@@ -146,8 +158,9 @@ public class ConvertGeomToTronconHandler extends AbstractNavigationHandler {
 
                     if(geom !=null) {
                         final Session session = Injector.getBean(Session.class);
-                        final TronconDigue troncon = showTronconDialog(typeName, typeClass, maleGender, Digue.class, showRive, parentLabel);
-                        if (troncon == null) return;
+//                        final TronconDigue troncon = showTronconDialog(typeName, typeClass, maleGender, Digue.class, showRive, parentLabel);
+                        final TronconDigue troncon = showTronconDialog(typeName, typeClass, maleGender, parentClass, showRive, parentLabel);
+                        if (troncon == null) {this.endVisit(); return;}
                         try{
                             //convertion from data crs to base crs
                             geom = JTS.transform(geom, CRS.findOperation(
@@ -165,6 +178,7 @@ public class ConvertGeomToTronconHandler extends AbstractNavigationHandler {
                             SIRS.LOGGER.log(Level.WARNING, ex.getMessage(),ex);
                         }
                     }
+                    this.endVisit();
                 }
 
                 @Override

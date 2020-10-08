@@ -313,7 +313,12 @@ public class SystemeReperageRepository extends AbstractSIRSRepository<SystemeRep
         };
         while (iterator.hasNext()) {
             final Positionable p = iterator.next();
-            if (updateNeeded.test(p)) {
+            
+            if(p.getGeometry()==null){
+                SirsCore.LOGGER.log(Level.WARNING, "The {0} {1} has no geometry\u2026 Position update is going to be skipped", new Object[]{p.getClass().getSimpleName(), p.getDesignation()});
+            }
+            
+            if (p.getGeometry()!=null && updateNeeded.test(p)) {
                 if (newSR != null && !newSrBorneIds.isEmpty()) {
                     // We must update linear information.
                     final TronconUtils.PosInfo pInfo = new TronconUtils.PosInfo(p, troncon, tronconSegments);

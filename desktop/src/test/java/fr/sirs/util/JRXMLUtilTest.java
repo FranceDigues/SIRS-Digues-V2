@@ -36,6 +36,9 @@ public class JRXMLUtilTest {
     public void test_extractLabel() {
         assertEquals("Présence de Végétation dangereuse (arbustive et/ou arborescente, ou de souches)", JRXMLUtil.extractLabel("VEG : Présence de Végétation dangereuse (arbustive et/ou arborescente, ou de souches)"));
         assertEquals("Isère RD du pont RN90 (P 549) à amont pont de Pique Pierre (P 610)", JRXMLUtil.extractLabel("TrD - 27 : Isère RD du pont RN90 (P 549) à amont pont de Pique Pierre (P 610)"));
+        
+        // Cas particulier observé lorsque l'utilisateur souhaite n'oberver que le nom complet/abrégé de la désignation.
+        assertEquals("Ct 45", JRXMLUtil.extractLabel("1) Ct 45"));        
     }
     
     @Test

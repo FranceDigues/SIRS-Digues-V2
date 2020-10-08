@@ -5,9 +5,9 @@
     <!-- Name of the plugin, used for packaging and description -->
     <artifactId>plugin-document</artifactId>
     <!-- Version must be composed of two integers (major and minor version) separated by a dot. -->
-    <version>1.3</version>
+    <version>1.6</version>
     <packaging>jar</packaging>
-    
+
     <name>Plugin dossier d'ouvrages</name>
     <description>Gestion des dossiers d'ouvrages</description>
     <!--url>http://www.myorganization.org</url-->
@@ -19,7 +19,7 @@
     </parent>
 
     <properties>
-        <plugin.core.version.min>4</plugin.core.version.min>
+        <plugin.core.version.min>25</plugin.core.version.min>
     </properties>
 
     <dependencies>
@@ -80,7 +80,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
-                    <archive>                   
+                    <archive>
                         <manifest>
                             <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                             <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
@@ -88,7 +88,7 @@
                     </archive>
                 </configuration>
             </plugin>
-            
+
         </plugins>
     </build>
 

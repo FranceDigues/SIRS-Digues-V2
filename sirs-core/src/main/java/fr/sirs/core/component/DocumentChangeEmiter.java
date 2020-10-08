@@ -127,25 +127,30 @@ public class DocumentChangeEmiter {
     private void handleChanges(ChangesFeed feed) throws InterruptedException {
 
         final Thread currentThread = Thread.currentThread();
-        final HashMap<Class, List<Element>> tmpAddedElements = new HashMap<>();
-        final HashMap<Class, List<Element>> tmpChangedElements = new HashMap<>();
+        final Map<Class, List<Element>> tmpAddedElements = new HashMap<>();
+        final Map<Class, List<Element>> tmpChangedElements = new HashMap<>();
         Set<String> removedElements = new HashSet<>();
 
         while (!currentThread.isInterrupted()) {
-            final DocumentChange change = feed.next(BULK_TIME, BULK_UNIT);
-            if (change == null)
-                break;
+            if(feed.isAlive()){
+                final DocumentChange change = feed.next(BULK_TIME, BULK_UNIT);
+                if (change == null)
+                    break;
 
-            try {
-                if (change.isDeleted()) {
-                    removedElements.add(change.getId());
-                } else if (FIRST_REVISION.matcher(change.getRevision()).find()) {
-                    DocHelper.toElement(change.getDoc()).ifPresent((Element e) -> putElement(e, tmpAddedElements));
-                } else {
-                    DocHelper.toElement(change.getDoc()).ifPresent((Element e) -> putElement(e, tmpChangedElements));
+                try {
+                    if (change.isDeleted()) {
+                        removedElements.add(change.getId());
+                    } else if (change.getRevision()!=null && FIRST_REVISION.matcher(change.getRevision()).find()) {
+                        DocHelper.toElement(change.getDoc()).ifPresent((Element e) -> putElement(e, tmpAddedElements));
+                    } else if(change.getDoc()!=null) {
+                        DocHelper.toElement(change.getDoc()).ifPresent((Element e) -> putElement(e, tmpChangedElements));
+                    }
+                    else {
+                        SirsCore.LOGGER.log(Level.WARNING, String.format("Unknown change detected that is neither deletion, creation or document update"));
+                    }
+                } catch (Exception e) {
+                    SirsCore.LOGGER.log(Level.WARNING, "An error occurred while analyzing a database change. Change will be ignored.", e);
                 }
-            } catch (Exception e) {
-                SirsCore.LOGGER.log(Level.WARNING, "An error occurred while analyzing a database change. Change will be ignored.", e);
             }
         }
 

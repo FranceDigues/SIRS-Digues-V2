@@ -23,19 +23,27 @@ import fr.sirs.core.LinearReferencingUtilities;
 import fr.sirs.core.TronconUtils;
 import fr.sirs.core.model.AvecForeignParent;
 import fr.sirs.core.model.BorneDigue;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.SystemeReperage;
 import fr.sirs.core.model.TronconDigue;
 import fr.sirs.theme.ui.PojoTable;
+import fr.sirs.ui.Growl;
+import fr.sirs.util.SirsStringConverter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
+import javafx.beans.InvalidationListener;
+import javafx.beans.WeakInvalidationListener;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TableCell;
@@ -45,6 +53,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.util.Callback;
 import org.geotoolkit.display2d.GO2Utilities;
 import org.geotoolkit.gui.javafx.util.FXNumberCell;
+import org.geotoolkit.gui.javafx.util.TaskManager;
 import org.geotoolkit.referencing.LinearReferencing;
 
 /**
@@ -57,6 +66,7 @@ import org.geotoolkit.referencing.LinearReferencing;
 public abstract class TronconChoicePrintPane extends BorderPane {
 
     @FXML protected Tab uiTronconChoice;
+    @FXML protected FXPrestationPredicater uiPrestationPredicater;
 
     // Garde en cache les PRs de début et de fin de sections de tronçons imprimables (ajustables pour limiter l'impression à des parties de tronçons seulement).
     protected final Map<String, ObjectProperty<Number>[]> ajustedPrsByTronconId = new HashMap<>();
@@ -68,15 +78,21 @@ public abstract class TronconChoicePrintPane extends BorderPane {
 
     public TronconChoicePrintPane(final Class forBundle) {
         SIRS.loadFXML(this, forBundle);
-        tronconsTable.setTableItems(()-> (ObservableList) SIRS.observableList(Injector.getSession().getRepositoryForClass(TronconDigue.class).getAll()));
+        final Session session = Injector.getSession();
+        tronconsTable.setTableItems(()-> (ObservableList) SIRS.observableList(session.getRepositoryForClass(TronconDigue.class).getAll()));
         tronconsTable.commentAndPhotoProperty().set(false);
         uiTronconChoice.setContent(tronconsTable);
+        tronconsTable.getSelectedItems().addListener((ListChangeListener.Change<? extends Element> ch) -> filterPrestations(ch));
+    }
+
+    private void filterPrestations(ListChangeListener.Change<? extends Element> ch) {
+        uiPrestationPredicater.updateList(ch);
     }
 
     protected class TronconChoicePojoTable extends PojoTable {
 
         public TronconChoicePojoTable() {
-            super(TronconDigue.class, "Tronçons");
+            super(TronconDigue.class, "Tronçons", (ObjectProperty<Element>) null, false); //le dernier input 'false" permet de ne pas appliquer les préférences utilisateur depuis le constructeur parent.
             getColumns().remove(editCol);
             editableProperty.set(false);
             createNewProperty.set(false);
@@ -100,23 +116,28 @@ public abstract class TronconChoicePrintPane extends BorderPane {
             getColumns().add(new EditablePRColumn("PR fin sélectionné", ExtremiteTroncon.FIN));
             getColumns().add(new OriginalPRColumn("PR minimum existant", ExtremiteTroncon.DEBUT));
             getColumns().add(new OriginalPRColumn("PR maximum existant", ExtremiteTroncon.FIN));
+
+            // application des préférence (après la suppression de la colonne 'editcol'
+            applyPreferences();
+            listenPreferences();
         }
     }
 
     private enum ExtremiteTroncon {DEBUT, FIN}
 
+    protected abstract InvalidationListener getParameterListener();
+
     private class EditablePRColumn extends TableColumn {
 
         public EditablePRColumn(final String text, final ExtremiteTroncon extremite){
             super(text);
-
             setEditable(true);
 
             setCellFactory(new Callback<TableColumn<TronconDigue, Number>, TableCell<TronconDigue, Number>>() {
 
                 @Override
                 public TableCell<TronconDigue, Number> call(TableColumn<TronconDigue, Number> param) {
-                    final TableCell<TronconDigue, Number> tableCell = new FXNumberCell(Float.class);
+                    final TableCell<TronconDigue, Number> tableCell = new PREditCell(Float.class, getParameterListener());
                     tableCell.setEditable(true);
                     return tableCell;
                 }
@@ -140,6 +161,15 @@ public abstract class TronconChoicePrintPane extends BorderPane {
                     return null;
                 }
             });
+        }
+    }
+
+    private class PREditCell<TronconDigue, T> extends FXNumberCell<T> {
+
+        private PREditCell(final Class clazz, final InvalidationListener invalidListener) {
+            super(clazz);
+            field.valueProperty().addListener(new WeakInvalidationListener(invalidListener));
+            field.valueProperty().addListener(n -> commitEdit(field.valueProperty().get()));
         }
     }
 
@@ -187,26 +217,15 @@ public abstract class TronconChoicePrintPane extends BorderPane {
         final int index = extremite==ExtremiteTroncon.FIN ? 1:0;
         final ObjectProperty<Number> prProperty;
 
-        if(prCache.get(troncon.getId())==null) prCache.put(troncon.getId(), new ObjectProperty[2]);
+        if(prCache.get(troncon.getId())==null)
+            prCache.put(troncon.getId(), new ObjectProperty[2]);
 
         // Si le PR de l'extrémité voulue du tronçon n'a pas encore été calculé.
-        if(prCache.get(troncon.getId())[index]==null){
+        if (prCache.get(troncon.getId())[index]==null) {
             prProperty = new SimpleObjectProperty<>();
-            final SystemeReperage sr = Injector.getSession().getRepositoryForClass(SystemeReperage.class).get(troncon.getSystemeRepDefautId());
-            final LinearReferencing.SegmentInfo[] tronconSegments = LinearReferencingUtilities.buildSegments(LinearReferencing.asLineString(troncon.getGeometry()));
 
-            final Point point;
-            switch(extremite){
-                case FIN:
-                    final LinearReferencing.SegmentInfo lastSegment = tronconSegments[tronconSegments.length-1];
-                    point = GO2Utilities.JTS_FACTORY.createPoint(lastSegment.getPoint(lastSegment.length, 0));
-                    break;
-                case DEBUT:
-                default:
-                    point = GO2Utilities.JTS_FACTORY.createPoint(tronconSegments[0].getPoint(0, 0));
-                    break;
-            }
-            prProperty.set(TronconUtils.computePR(tronconSegments, sr, point, Injector.getSession().getRepositoryForClass(BorneDigue.class)));
+            TaskManager.INSTANCE.submit(new computePRTask(troncon, extremite, prProperty));
+
             prCache.get(troncon.getId())[index] = prProperty;
         }
         else {
@@ -215,10 +234,62 @@ public abstract class TronconChoicePrintPane extends BorderPane {
         return prProperty;
     }
 
+    /**
+     * Tâche asynchrone pour le calcul des valeurs de PR (début et fin) calculées.
+     */
+    private final class computePRTask extends Task<Number> {
+
+        private final TronconDigue troncon;
+        private final ExtremiteTroncon extremite;
+
+        final ObjectProperty<Number> prProperty;
+
+        computePRTask(final TronconDigue troncon, final ExtremiteTroncon extremite, final ObjectProperty<Number> prProperty ){
+            this.troncon=troncon;
+            this.extremite=extremite;
+            this.prProperty=prProperty;
+
+        }
+
+        @Override
+        protected Number call() throws Exception {
+
+                final SystemeReperage sr = Injector.getSession().getRepositoryForClass(SystemeReperage.class).get(troncon.getSystemeRepDefautId());
+                final LinearReferencing.SegmentInfo[] tronconSegments = LinearReferencingUtilities.buildSegments(LinearReferencing.asLineString(troncon.getGeometry()));
+
+                final Point point;
+                switch (extremite) {
+                    case FIN:
+                        final LinearReferencing.SegmentInfo lastSegment = tronconSegments[tronconSegments.length - 1];
+                        point = GO2Utilities.JTS_FACTORY.createPoint(lastSegment.getPoint(lastSegment.length, 0));
+                        break;
+                    case DEBUT:
+                    default:
+                        point = GO2Utilities.JTS_FACTORY.createPoint(tronconSegments[0].getPoint(0, 0));
+                        break;
+                }
+                return TronconUtils.computePR(tronconSegments, sr, point, Injector.getSession().getRepositoryForClass(BorneDigue.class));
+        }
+
+        @Override
+        protected void succeeded() {
+            prProperty.set(getValue());
+            super.succeeded();
+        }
+
+        @Override
+        protected void failed() {
+            SIRS.LOGGER.log(Level.WARNING, "Cannot compute PR for linear " + troncon.getId(), getException());// SYM-1700
+                final String tronconTitle = new SirsStringConverter().toString(troncon);
+                new Growl(Growl.Type.WARNING, "Impossible de calculer les PRs du tronçon "+tronconTitle+". Veuillez vérifier les informations de référencement linéaire.").showAndFade();
+            super.failed();
+        }
+    }
+
     protected class TypeChoicePojoTable extends PojoTable {
 
         public TypeChoicePojoTable(final Class clazz, final String title) {
-            super(clazz, title);
+            super(clazz, title, (ObjectProperty<Element>) null);
             getColumns().remove(editCol);
             editableProperty.set(false);
             createNewProperty.set(false);

@@ -24,8 +24,6 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
-import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.value.ObservableValue;
 
 /**
  * A daemon which will run in background, closing all resources submitted.
@@ -66,28 +64,23 @@ public class ClosingDaemon {
         closer.start();
     }
 
-    public static void watchResource(final Object toWatch, final AutoCloseable toClose) {
-        watchResource(toWatch, new SimpleObjectProperty<>(toClose));
-    }
-
-    public static void watchResource(final Object toWatch, final ObservableValue<? extends AutoCloseable> toClose) {
-        referenceCache.put(toWatch, new ResourceReference(toWatch, INSTANCE.phantomQueue, toClose));
+    public static void watchResource(final Object toWatch, final AutoCloseable closeable) {
+        referenceCache.put(toWatch, new ResourceReference(toWatch, INSTANCE.phantomQueue, closeable));
     }
 
     private static class ResourceReference extends PhantomReference implements AutoCloseable {
 
-        private final ObservableValue<? extends AutoCloseable> streamToClose;
-        private ResourceReference(Object referent, ReferenceQueue q, ObservableValue<? extends AutoCloseable> objectToClose) {
+        private final AutoCloseable closeable;
+        private ResourceReference(Object referent, ReferenceQueue q, AutoCloseable closeable) {
             super(referent, q);
-            this.streamToClose = objectToClose;
+            this.closeable = closeable;
         }
 
         @Override
         public void close() {
             try {
-                final AutoCloseable value = streamToClose.getValue();
-                if (value != null) {
-                    value.close();
+                if (closeable != null) {
+                    closeable.close();
                 }
             } catch (Exception e) {
                 SirsCore.LOGGER.log(Level.WARNING, "A streamed CouchDB view result cannot be closed. It's likely to cause memory leaks.", e);

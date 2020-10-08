@@ -15,7 +15,7 @@ public class DocumentUtilities {
     public static boolean isFileAvailable(final SIRSFileReference fileRef) {
         final String chemin = fileRef.getChemin();
         return chemin != null &&
-                !chemin.isEmpty() &&
+                !chemin.trim().isEmpty() &&
                 Files.isRegularFile(SIRS.getDocumentAbsolutePath(fileRef));
     }
 

@@ -1,158 +1,158 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+           xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
-  <modelVersion>4.0.0</modelVersion>
+    <modelVersion>4.0.0</modelVersion>
 
-  <parent>
+    <parent>
+        <groupId>fr.sirs</groupId>
+        <artifactId>sirs</artifactId>
+        <version>2.x-SNAPSHOT</version>
+    </parent>
+
     <groupId>fr.sirs</groupId>
-    <artifactId>sirs</artifactId>
-    <version>2.x-SNAPSHOT</version>
-  </parent>
+    <artifactId>desktop</artifactId>
+    <packaging>jar</packaging>
+    <name>Desktop</name>
+    <description>Desktop</description>
 
-  <groupId>fr.sirs</groupId>
-  <artifactId>desktop</artifactId>
-  <packaging>jar</packaging>
-  <name>Desktop</name>
-  <description>Desktop</description>
+    <dependencies>
+        <dependency>
+            <groupId>fr.sirs</groupId>
+            <artifactId>sirs-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
-  <dependencies>
-    <dependency>
-      <groupId>fr.sirs</groupId>
-      <artifactId>sirs-core</artifactId>
-      <version>${project.version}</version>
-    </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
 
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-context</artifactId>
-      <version>${spring.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-test</artifactId>
-      <version>${spring.version}</version>
-      <scope>test</scope>
-    </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-test</artifactId>
+            <version>${spring.version}</version>
+            <scope>test</scope>
+        </dependency>
     
-    <dependency>
-        <groupId>org.apache.commons</groupId>
-        <artifactId>commons-csv</artifactId>
-        <version>1.0</version>
-    </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>1.0</version>
+        </dependency>
 
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-widgets-javafx</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-jasperreport</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-svg-batik</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-widgets-javafx</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-jasperreport</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-svg-batik</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
 
-    <!-- format -->
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-feature-csv</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-coverage-geotiff</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-client-osmtms</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-client-wms</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-feature-sql</artifactId>
-      <version>${geotoolkit.version}</version>
-    </dependency>
-    <!-- Moved out of Geotk, it does not follow the same versioning. -->
-    <dependency>
-      <groupId>org.geotoolkit</groupId>
-      <artifactId>geotk-esri</artifactId>
-      <version>${geotoolkit.esri.version}</version>
-    </dependency>
-    <!-- Nécessaire pour les champs en gras dans les fiches générées par Jasperreports. -->
-    <dependency>
-        <groupId>net.sf.jasperreports</groupId>
-        <artifactId>jasperreports-fonts</artifactId>
-        <version>6.0.0</version>
-    </dependency>
-    
-    <!-- Introduit suite aux demandes concernant le formattage HTML des commentaires. 
-         Le client désire supprimer toute mise en forme HTML pour conserver du 
-         texte simple partout. On utilise donc JSoup pour supprimer tout formattage
-         HTML dans les documents en bdd. 
-         Réf @ https://jira.geomatys.com/browse/SYM-1592
-    -->
-    <dependency>
-        <!-- jsoup HTML parser library @ http://jsoup.org/ -->
-        <groupId>org.jsoup</groupId>
-        <artifactId>jsoup</artifactId>
-        <version>1.10.2</version>
-    </dependency>
-
-  </dependencies>
-
-  <build>
-    <plugins>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>2.3.2</version>
-        <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
-          <debug>true</debug>
-        </configuration>
-      </plugin>
-      <plugin>
-          <groupId>fr.sirs.maven</groupId>
-          <artifactId>gen-maven-plugin</artifactId>
+        <!-- format -->
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-feature-csv</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-coverage-geotiff</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-client-osmtms</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-client-wms</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-feature-sql</artifactId>
+            <version>${geotoolkit.version}</version>
+        </dependency>
+        <!-- Moved out of Geotk, it does not follow the same versioning. -->
+        <dependency>
+            <groupId>org.geotoolkit</groupId>
+            <artifactId>geotk-esri</artifactId>
+            <version>${geotoolkit.esri.version}</version>
+        </dependency>
+        <!-- Nécessaire pour les champs en gras dans les fiches générées par Jasperreports. -->
+        <dependency>
+            <groupId>net.sf.jasperreports</groupId>
+            <artifactId>jasperreports-fonts</artifactId>
+            <version>6.0.0</version>
+        </dependency>
         
-        <executions>
-          <execution>
-            <id>fxml</id>
-            <goals>
-              <goal>fxml</goal>
-            </goals>
-            <configuration>
-              <packageName>fr.sirs.theme.ui</packageName>
-            </configuration>
-          </execution>
-          <execution>
-            <id>fx-controller</id>
-            <goals>
-              <goal>fxcontroller</goal>
-            </goals>
-            <configuration>
-              <packageName>fr.sirs.theme.ui</packageName>
-            </configuration>
-          </execution>
-        </executions>
+        <!-- Introduit suite aux demandes concernant le formattage HTML des commentaires. 
+             Le client désire supprimer toute mise en forme HTML pour conserver du 
+             texte simple partout. On utilise donc JSoup pour supprimer tout formattage
+             HTML dans les documents en bdd. 
+             Réf @ https://jira.geomatys.com/browse/SYM-1592
+        -->
+        <dependency>
+            <!-- jsoup HTML parser library @ http://jsoup.org/ -->
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.10.2</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>2.3.2</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                    <debug>true</debug>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>fr.sirs.maven</groupId>
+                <artifactId>gen-maven-plugin</artifactId>
         
-        <configuration>
-          <model>../sirs-core/model/sirs.ecore</model>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
+                <executions>
+                    <execution>
+                        <id>fxml</id>
+                        <goals>
+                            <goal>fxml</goal>
+                        </goals>
+                        <configuration>
+                            <packageName>fr.sirs.theme.ui</packageName>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>fx-controller</id>
+                        <goals>
+                            <goal>fxcontroller</goal>
+                        </goals>
+                        <configuration>
+                            <packageName>fr.sirs.theme.ui</packageName>
+                        </configuration>
+                    </execution>
+                </executions>
+        
+                <configuration>
+                    <model>../sirs-core/model/sirs.ecore</model>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

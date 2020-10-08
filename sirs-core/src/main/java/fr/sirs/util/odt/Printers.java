@@ -22,8 +22,8 @@ import fr.sirs.core.InjectorCore;
 import fr.sirs.core.SessionCore;
 import fr.sirs.core.SirsCore;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import org.apache.sis.util.Static;
 
 /**
@@ -44,16 +44,16 @@ public class Printers extends Static {
              * then warn user that we've found multiple implementations for the same
              * property.
              */
-            Map<String, PropertyPrinter> beans = InjectorCore.getBean(SessionCore.class)
+            final Map<String, PropertyPrinter> beans = InjectorCore.getBean(SessionCore.class)
                     .getApplicationContext().getBeansOfType(PropertyPrinter.class);
 
             PRINTERS = new HashMap<>(beans.size());
-            final HashMap<String, HashSet<PropertyPrinter>> doublons = new HashMap<>();
+            final Map<String, Set<PropertyPrinter>> doublons = new HashMap<>();
             for (final PropertyPrinter p : beans.values()) {
                 for (final String pName : p.properties) {
                     final PropertyPrinter doublon = PRINTERS.put(pName, p);
                     if (doublon != null) {
-                        final HashSet<PropertyPrinter> tmpSet = doublons.get(pName);
+                        final Set<PropertyPrinter> tmpSet = doublons.get(pName);
                         tmpSet.add(p);
                         tmpSet.add(doublon);
                     }
@@ -62,7 +62,7 @@ public class Printers extends Static {
 
             if (!doublons.isEmpty()) {
                 final String sep = System.lineSeparator();
-                for (final Map.Entry<String, HashSet<PropertyPrinter>> entry : doublons.entrySet()) {
+                for (final Map.Entry<String, Set<PropertyPrinter>> entry : doublons.entrySet()) {
                         SirsCore.LOGGER.warning(() -> {
                             final StringBuilder msg = new StringBuilder("Multiple printers registered for property ")
                                     .append(entry.getKey())

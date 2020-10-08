@@ -70,6 +70,10 @@ public abstract class TemporalTronconChoicePrintPane extends TronconChoicePrintP
             if (newValue && uiOptionNonArchive.isSelected()) {
                 uiOptionNonArchive.setSelected(false);
             }
+            else {
+                uiOptionDebutArchive.setValue(null);
+                uiOptionFinArchive.setValue(null);
+            }
         });
 
         uiOptionDebutArchive.disableProperty().bind(uiOptionNonArchive.selectedProperty());

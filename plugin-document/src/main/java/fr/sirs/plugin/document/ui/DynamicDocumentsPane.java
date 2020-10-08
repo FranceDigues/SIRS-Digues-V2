@@ -34,9 +34,13 @@ import fr.sirs.plugin.document.ODTUtils;
 import static fr.sirs.plugin.document.PropertiesFileUtilities.*;
 import static fr.sirs.plugin.document.ui.DocumentsPane.ROOT_FOLDER;
 import fr.sirs.ui.report.FXModeleRapportsPane;
+import fr.sirs.util.DatePickerConverter;
 import fr.sirs.util.SirsStringConverter;
 import java.io.File;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -62,10 +66,12 @@ import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
+import org.apache.sis.measure.NumberRange;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
@@ -93,6 +99,9 @@ public class DynamicDocumentsPane extends BorderPane {
 
     @FXML private TextField uiDocumentNameField;
 
+    @FXML private DatePicker uiPeriodeFin;
+    @FXML private DatePicker uiPeriodeDebut;
+
     private final FileTreeItem root;
 
     @Autowired
@@ -107,6 +116,12 @@ public class DynamicDocumentsPane extends BorderPane {
         this.root = root;
 
         uiGenerateBtn.setTooltip(new Tooltip("Générer le document dynamique"));
+
+        final LocalDate date = LocalDate.now();
+        uiPeriodeDebut.valueProperty().set(date.minus(10, ChronoUnit.YEARS));
+        uiPeriodeFin.valueProperty().set(date);
+        DatePickerConverter.register(uiPeriodeDebut);
+        DatePickerConverter.register(uiPeriodeFin);
 
         SIRS.initCombo(uiSECombo, FXCollections.observableList(session.getPreviews().getByClass(SystemeEndiguement.class)), null);
 
@@ -183,14 +198,26 @@ public class DynamicDocumentsPane extends BorderPane {
             return;
         }
 
+
+        final LocalDate periodeDebut = uiPeriodeDebut.getValue();
+        final LocalDate periodeFin = uiPeriodeFin.getValue();
+        final NumberRange dateRange;
+        if (periodeDebut == null && periodeFin == null) {
+            dateRange = null;
+        } else {
+            final long dateDebut = periodeDebut == null ? 0 : periodeDebut.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli();
+            final long dateFin = periodeFin == null ? Long.MAX_VALUE : periodeFin.atTime(23, 59, 59).toInstant(ZoneOffset.UTC).toEpochMilli();
+            dateRange = NumberRange.create(dateDebut, true, dateFin, true);
+        }
+
         final boolean onlySE = uiOnlySEBox.isSelected();
         final File seDir = getOrCreateSE(rootDir, getSelectedSE());
         final Task generator;
         if (onlySE) {
             final Path outputDoc = seDir.toPath().resolve(DocumentsPane.DOCUMENT_FOLDER).resolve(docName);
-            generator = ODTUtils.generateDoc(modele, getTronconList(), outputDoc.toFile(), root.getLibelle());
+            generator = ODTUtils.generateDoc(modele, getTronconList(), outputDoc.toFile(), root.getLibelle(), dateRange);
         } else {
-            generator = ODTUtils.generateDocsForDigues(docName, onlySE, modele, getTronconList(), seDir, root.getLibelle());
+            generator = ODTUtils.generateDocsForDigues(docName, onlySE, modele, getTronconList(), seDir, root.getLibelle(), dateRange);
         }
 
         generator.setOnSucceeded(evt -> Platform.runLater(() -> root.update(false)));

@@ -42,7 +42,7 @@
             </HBox>
 
 <!-- POSITIONEMENT -->
-    <FXPositionablePane fx:id="uiPositionable" />  
+    <FXPositionablePane fx:id="uiPositionable" />
 
 <!-- FORM WHICH WILL CONTAIN ALL SIMPLE EDITORS -->
 
@@ -58,7 +58,7 @@
                 <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
               </rowConstraints-->
               <children>
-                   <!-- EString -->                 
+                   <!-- EString -->
                    <Label text="%lieuDit" GridPane.rowIndex="0" />
                    <TextField fx:id="ui_lieuDit" GridPane.columnIndex="1" GridPane.rowIndex="0"  maxHeight="-Infinity" maxWidth="-Infinity"/>
                    <Label text="%coteId" GridPane.rowIndex="1" />
@@ -98,25 +98,28 @@
         <FXFreeTab fx:id="ui_prestationIds" text="%prestationIds"/>
         <FXFreeTab fx:id="ui_articleIds" text="%articleIds"/>
         <FXFreeTab fx:id="ui_evenementHydrauliqueIds" text="%evenementHydrauliqueIds"/>
-        
+
         <Tab text="Ouvrages et réseaux associés">
             <TabPane TabClosingPolicy="UNAVAILABLE" BorderPane.alignment="CENTER">
               <tabs>
-
-                <FXFreeTab fx:id="ui_reseauHydrauliqueCielOuvertIds" text="%reseauHydrauliqueCielOuvertIds"/>
+                <FXFreeTab fx:id="ui_stationPompageIds" text="stationPompageIds"/>
                 <FXFreeTab fx:id="ui_reseauHydrauliqueFermeIds" text="%reseauHydrauliqueFermeIds"/>
                 <FXFreeTab fx:id="ui_ouvrageHydrauliqueAssocieIds" text="%ouvrageHydrauliqueAssocieIds"/>
                 <FXFreeTab fx:id="ui_reseauTelecomEnergieIds" text="%reseauTelecomEnergieIds"/>
                 <FXFreeTab fx:id="ui_ouvrageTelecomEnergieIds" text="%ouvrageTelecomEnergieIds"/>
+                <FXFreeTab fx:id="ui_reseauHydrauliqueCielOuvertIds" text="%reseauHydrauliqueCielOuvertIds"/>
                 <FXFreeTab fx:id="ui_ouvrageParticulierIds" text="%ouvrageParticulierIds"/>
                 <FXFreeTab fx:id="ui_echelleLimnimetriqueIds" text="%echelleLimnimetriqueIds"/>
               </tabs>
             </TabPane>
         </Tab>
-        
+
         <Tab text="Voiries associés">
             <TabPane TabClosingPolicy="UNAVAILABLE" BorderPane.alignment="CENTER">
               <tabs>
+                <FXFreeTab fx:id="ui_voieAccesIds" text="%voieAccesIds"/>
+                <FXFreeTab fx:id="ui_ouvrageFranchissementIds" text="%ouvrageFranchissementIds"/>
+                <FXFreeTab fx:id="ui_ouvertureBatardableIds" text="ouvertureBatardableIds"/>
                 <FXFreeTab fx:id="ui_voieDigueIds" text="%voieDigueIds"/>
                 <FXFreeTab fx:id="ui_ouvrageVoirieIds" text="%ouvrageVoirieIds"/>
               </tabs>

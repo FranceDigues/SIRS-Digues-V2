@@ -20,6 +20,7 @@ package fr.sirs.plugin.document;
 
 import fr.sirs.Injector;
 import fr.sirs.core.component.DigueRepository;
+import fr.sirs.core.model.Objet;
 import fr.sirs.core.model.TronconDigue;
 import fr.sirs.core.model.report.ModeleRapport;
 import static fr.sirs.plugin.document.PropertiesFileUtilities.getElements;
@@ -40,6 +41,7 @@ import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.concurrent.Task;
+import org.apache.sis.measure.NumberRange;
 import org.geotoolkit.gui.javafx.util.TaskManager;
 import org.odftoolkit.simple.TextDocument;
 import org.odftoolkit.simple.table.Row;
@@ -53,7 +55,8 @@ public class ODTUtils extends fr.sirs.util.odt.ODTUtils {
 
     private static final String[] TABLE_HEADERS = new String[]{"Nom", "Taille", "N° Inventaire", "Lieu classement"};
 
-    public static Task generateDocsForDigues(final String docName, boolean onlySe, final ModeleRapport modele, final Collection<TronconDigue> troncons, final File seDir, final String title) {
+    public static Task generateDocsForDigues(final String docName, boolean onlySe, final ModeleRapport modele,
+            final Collection<TronconDigue> troncons, final File seDir, final String title, final NumberRange dateRange) {
         return TaskManager.INSTANCE.submit(new Task() {
 
             @Override
@@ -69,10 +72,13 @@ public class ODTUtils extends fr.sirs.util.odt.ODTUtils {
                     final File docDir = new File(getOrCreateTR(digDir, troncon), DocumentsPane.DOCUMENT_FOLDER);
                     final File newDoc = new File(docDir, docName);
 
-                    final Task reportGenerator = generateReport(modele, getElements(troncons), newDoc.toPath(), title);
+                    List<Objet> elements = getElements(troncons, dateRange);
+                    final Task reportGenerator = generateReport(modele, elements, newDoc.toPath(), title);
                     Platform.runLater(() -> reportGenerator.setOnSucceeded(event -> {
                         setBooleanProperty(newDoc, DYNAMIC, true);
                         setProperty(newDoc, MODELE, modele.getId());
+                        setProperty(newDoc, DocumentsPane.DATE_RANGE_MIN, dateRange.getMinValue().toString());
+                        setProperty(newDoc, DocumentsPane.DATE_RANGE_MAX, dateRange.getMaxValue().toString());
                         updateProgress(progress.incrementAndGet(), total);
                     }));
                     tasks.add(reportGenerator);
@@ -89,7 +95,8 @@ public class ODTUtils extends fr.sirs.util.odt.ODTUtils {
         });
     }
 
-    public static Task<File> generateDoc(final ModeleRapport modele, final Collection<TronconDigue> troncons, final File outputDoc, final String title) {
+    public static Task<File> generateDoc(final ModeleRapport modele, final Collection<TronconDigue> troncons,
+            final File outputDoc, final String title, final NumberRange dateRange) {
         return TaskManager.INSTANCE.submit(new Task() {
 
             @Override
@@ -97,7 +104,8 @@ public class ODTUtils extends fr.sirs.util.odt.ODTUtils {
                 updateTitle("Génération d'un rapport");
                 updateMessage("Recherche des objets du rapport...");
 
-                final Task reportGenerator = generateReport(modele, getElements(troncons), outputDoc.toPath(), title);
+                List<Objet> elements = getElements(troncons, dateRange);
+                final Task reportGenerator = generateReport(modele, elements, outputDoc.toPath(), title);
                 Platform.runLater(() -> {
                     reportGenerator.messageProperty().addListener((obs, oldValue, newValue) -> updateMessage(newValue));
                     reportGenerator.workDoneProperty().addListener((obs, oldValue, newValue) -> updateProgress(newValue.doubleValue(), reportGenerator.getTotalWork()));
@@ -107,6 +115,10 @@ public class ODTUtils extends fr.sirs.util.odt.ODTUtils {
                 setBooleanProperty(outputDoc, DYNAMIC, true);
                 setProperty(outputDoc, MODELE, modele.getId());
 
+                if(dateRange != null) {
+                    setProperty(outputDoc, DocumentsPane.DATE_RANGE_MIN, dateRange.getMinValue().toString());
+                    setProperty(outputDoc, DocumentsPane.DATE_RANGE_MAX, dateRange.getMaxValue().toString());
+                }
                 return outputDoc;
             }
         });

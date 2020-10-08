@@ -19,9 +19,7 @@
 package fr.sirs.plugin.berge;
 
 import fr.sirs.plugin.berge.ui.SuiviBergePane;
-import fr.sirs.theme.Theme;
 import fr.sirs.theme.ui.AbstractPluginsButtonTheme;
-import java.util.List;
 import javafx.scene.Parent;
 import javafx.scene.image.Image;
 import javafx.scene.layout.BorderPane;
@@ -41,6 +39,4 @@ public final class SuiviBergeTheme extends AbstractPluginsButtonTheme {
         final BorderPane borderPane = new SuiviBergePane();
         return borderPane;
     }
-
-    
 }

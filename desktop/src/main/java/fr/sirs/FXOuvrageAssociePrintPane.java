@@ -19,7 +19,9 @@
 package fr.sirs;
 
 import fr.sirs.core.model.OuvrageHydrauliqueAssocie;
+import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.RefOuvrageHydrauliqueAssocie;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import fr.sirs.ui.Growl;
 import fr.sirs.util.ClosingDaemon;
 import java.util.List;
@@ -110,6 +112,9 @@ public class FXOuvrageAssociePrintPane extends TemporalTronconChoicePrintPane {
         uiOptionDebutArchive.valueProperty().addListener(parameterListener);
         uiOptionFinArchive.valueProperty().addListener(parameterListener);
 
+
+        uiPrestationPredicater.uiOptionPrestation.selectedProperty().addListener(parameterListener);
+
         uiCountProgress.setVisible(false);
         updateCount(null);
     }
@@ -142,10 +147,12 @@ public class FXOuvrageAssociePrintPane extends TemporalTronconChoicePrintPane {
 
     private Stream<OuvrageHydrauliqueAssocie> getData() {
             final Predicate userOptions = new TypeOuvragePredicate()
+                    .and(OuvrageHydrauliqueAssocie::getValid) // On n'autorise à l'impression uniquement les désordre valides.
                     .and(new TemporalPredicate())
                     .and(new LinearPredicate<>())
                 // /!\ It's important that pr filtering is done AFTER linear filtering.
-                    .and(new PRPredicate<>());
+                    .and(new PRPredicate<>())
+                    .and(uiPrestationPredicater.getPredicate());
 
         final CloseableIterator<OuvrageHydrauliqueAssocie> it = Injector.getSession()
                 .getRepositoryForClass(OuvrageHydrauliqueAssocie.class)
@@ -154,7 +161,8 @@ public class FXOuvrageAssociePrintPane extends TemporalTronconChoicePrintPane {
 
         final Spliterator<OuvrageHydrauliqueAssocie> split = Spliterators.spliteratorUnknownSize(it, 0);
         final Stream dataStream = StreamSupport.stream(split, false)
-                .filter(userOptions);
+                .filter(userOptions)
+                .peek(p -> ConvertPositionableCoordinates.COMPUTE_MISSING_COORD.test((Positionable) p));
 
         dataStream.onClose(() -> it.close());
         ClosingDaemon.watchResource(dataStream, it);
@@ -174,20 +182,20 @@ public class FXOuvrageAssociePrintPane extends TemporalTronconChoicePrintPane {
         });
 
         uiCountProgress.visibleProperty().bind(t.runningProperty());
-        t.setOnRunning(evt -> Platform.runLater(() -> {
-            uiCountLabel.setText(null);
-        }));
+        t.setOnRunning(evt -> uiCountLabel.setText(null));
 
-        t.setOnSucceeded(evt -> Platform.runLater(() -> {
-            uiCountLabel.setText(String.valueOf(t.getValue()));
-        }));
+        t.setOnSucceeded(evt -> uiCountLabel.setText(String.valueOf(t.getValue())));
 
-        t.setOnFailed(evt -> Platform.runLater(() -> {
-            new Growl(Growl.Type.ERROR, "Impossible de déterminer le nombre d'ouvrages à imprimer.").showAndFade();
-        }));
+        t.setOnFailed(evt -> new Growl(Growl.Type.ERROR, "Impossible de déterminer le nombre d'ouvrages à imprimer.").showAndFade());
 
         countTask.set(t);
         TaskManager.INSTANCE.submit(t);
+    }
+
+
+    @Override
+    protected InvalidationListener getParameterListener() {
+        return parameterListener;
     }
 
     private class TypeOuvragePredicate implements Predicate<OuvrageHydrauliqueAssocie> {

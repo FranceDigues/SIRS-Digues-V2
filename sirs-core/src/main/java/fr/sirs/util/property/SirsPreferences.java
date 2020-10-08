@@ -40,12 +40,25 @@ public class SirsPreferences extends Properties {
 
     public static enum PROPERTIES {
         REFERENCE_URL("Adresse des références", "Url à laquelle se trouvent les différents fichiers centralisés des références de l'application.", "http://sirs-digues.info/wp-content/tablesReferences/"),
+        PREPROGRAMMED_QUERIES_URL("Adresse des requêtes préprogrammées", "Url du fichier des requêtes préprogrammées.", "http://sirs-digues.info/wp-content/requetesPreprogrammees/preprogrammedQueries.properties"),
         UPDATE_CORE_URL("Mise à jour de l'application", "Url à laquelle se trouve le service de mise à jour de l'application.", "http://sirs-digues.info/wp-content/updates/core.json"),
         UPDATE_PLUGINS_URL("Mise à jour des plugins", "Url à laquelle se trouve le service de mise à jour des plugins.", "http://sirs-digues.info/wp-content/updates/plugins.json"),
         COUCHDB_LOCAL_ADDR("Addresse de la base CouchDB locale", "Addresse d'accès à la base CouchDB locale, pour les réplications sur le poste.", "http://127.0.0.1:5984/"),
+        /*
+        On initialise par défaut le nom du nœud local à nonode@nohost, nom qui semble utilisé par défaut par couchDB.
+        Mais cela peut provoquer des erreurs lorsqu'on s'adresse à un nœud qui porte un autre nom (cela arrive par exemple avec le serveur distant de Geomatys
+        dont le nœud se nomme : couchdb@couchdb-couchdb-0.couchdb-couchdb.demos.svc.cluster.local
+        Or, http://docs.couchdb.org/en/stable/api/server/configuration.html précise que le nom du nœud local peut être
+        remplacé de façon générique par "_local"
+        NODE_NAME("Nom du nœud de l'instance CouchDB", "Nom du nœud utilisé pour la configuration dans l'instance CouchDB.", "nonode@nohost"),
+        */
+        NODE_NAME("Nom du nœud de l'instance CouchDB", "Nom du nœud utilisé pour la configuration dans l'instance CouchDB.", "_local"),
+        CHECK_COUCHDB_VERSION("Vérifie la version de CouchDB", "Permet de vérifier ou d'ignorer la version de CouchDB au lancement de l'application.", Boolean.TRUE.toString()),
         DESIGNATION_AUTO_INCREMENT("Auto-incrément des désignations", "Lorsqu'un nouvel élément sera créé, sa désignation sera automatiquement remplie avec une valeur numérique"
-                + " déterminée à partir de l'objet du même type ayant une déisgnation de forme numérique la plus haute trouvée dans la base de données, + 1.", Boolean.FALSE.toString());
-
+                + " déterminée à partir de l'objet du même type ayant une désignation de forme numérique la plus haute trouvée dans la base de données, + 1.", Boolean.FALSE.toString()),
+        
+        ABSTRACT_SHOWCASE("Préférence pour la désignation des objets de l'application","Choix entre abrégé, nom complet ou les 2 pour la désignation des objet dans l'application.",
+           ShowCasePossibility.BOTH.name);
         public final String title;
         public final String description;
         public final String defaultValue;
@@ -56,6 +69,30 @@ public class SirsPreferences extends Properties {
         }
 
         public String getDefaultValue(){return defaultValue;}
+    }
+    
+    private Boolean showCase = null;
+    
+    public Boolean getShowCase(){
+        return showCase;        
+    }
+    
+    public Boolean setShowCase(Boolean newShowCase){
+        return showCase = newShowCase;        
+    }
+    
+    /**
+     * Retourne la valeur de la propriété indiquée en paramètre, ou, en son absence, sa valeur par défaut.
+     * @param property propriété
+     * @return valeur de la propriété si elle existe ou valeur par défaut dans le cas contraire.
+     */
+    public String getPropertySafeOrDefault(SirsPreferences.PROPERTIES property){
+        if(SirsPreferences.INSTANCE.getPropertySafe(property)!=null){
+            return SirsPreferences.INSTANCE.getPropertySafe(property);
+        }
+        else {
+            return property.getDefaultValue();
+        }
     }
 
     /**

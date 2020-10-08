@@ -35,6 +35,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.logging.Level;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
@@ -193,7 +194,7 @@ public class FXContactPane extends AbstractFXElementPane<Contact> {
     private final class ContactOrganismeTable extends PojoTable {
 
         public ContactOrganismeTable() {
-            super(ContactOrganisme.class, "Liste des organismes");
+            super(ContactOrganisme.class, "Liste des organismes", (ObjectProperty<Element>) null);
             editableProperty().bind(uiFicheMode.selectedProperty());
 
             final TableColumn<Element, String> organismeColumn = new TableColumn<>("Organisme");
@@ -274,7 +275,7 @@ public class FXContactPane extends AbstractFXElementPane<Contact> {
         protected ContactOrganisme createPojo() {
             final ContactOrganisme co = Injector.getSession().getElementCreator().createElement(ContactOrganisme.class);
             co.getId(); // Necessary to initialize element Id
-            co.setValid(!session.needValidationProperty().get());
+            co.setValid(session.createValidDocuments().get());
             co.setAuthor(session.getUtilisateur() == null? null : session.getUtilisateur().getId());
             co.setContactId(elementProperty.get().getId());
             final Organisme org = session.getRepositoryForClass(Organisme.class).getOne();

@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import javafx.embed.swing.JFXPanel;
@@ -49,7 +50,7 @@ public abstract class CouchDBTestCase extends TestCase {
     /**
      * A list of databases to delete at the end of test class.
      */
-    private static final HashSet<String> DBS_TO_DELETE = new HashSet<>();
+    private static final Set<String> DBS_TO_DELETE = new HashSet<>();
 
     /**
      * Default test database name.

@@ -24,7 +24,6 @@ import fr.sirs.Printable;
 import fr.sirs.SIRS;
 import fr.sirs.Session;
 import static fr.sirs.core.SirsCore.MODEL_PACKAGE;
-import fr.sirs.core.component.SQLQueryRepository;
 import fr.sirs.core.model.Element;
 import fr.sirs.core.model.Preview;
 import fr.sirs.core.model.ReferenceType;
@@ -80,6 +79,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.RadioButton;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
@@ -91,11 +91,15 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.Border;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
@@ -135,7 +139,7 @@ import org.opengis.util.GenericName;
  * TODO : make printable.
  * @author Johann Sorel (Geomatys)
  */
-public class FXSearchPane extends BorderPane {
+public class FXSearchPane extends SplitPane {
 
     public static final Image ICON_SAVE    = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_SAVE_ALIAS,22,Color.WHITE),null);
     public static final Image ICON_OPEN    = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_LIST_UL,22,Color.WHITE),null);
@@ -189,6 +193,9 @@ public class FXSearchPane extends BorderPane {
     private final Session session;
 
     private JDBCFeatureStore h2Store;
+
+    @FXML private BorderPane resultPane;
+
 
     /**
      * Définit s'il est nécessaire de lancer le processus d'export RDBMS pour pouvoir faire
@@ -261,7 +268,7 @@ public class FXSearchPane extends BorderPane {
         uiSimplePane.managedProperty().bind(uiSimplePane.visibleProperty());
         simpleRadio.selectedToggleProperty().addListener(
             (ObservableValue<? extends Toggle> observable, Toggle oldValue, Toggle newValue) -> {
-            setCenter(null);
+            resultPane.setCenter(null);
             if (newValue == null) simpleRadio.selectToggle(oldValue);
         });
 
@@ -330,6 +337,7 @@ public class FXSearchPane extends BorderPane {
 
         // Action on admin button
         uiQueryManagement.setOnAction((ActionEvent e)-> FXAdminQueryPane.showAndWait());
+
     }
 
     @FXML
@@ -422,11 +430,18 @@ public class FXSearchPane extends BorderPane {
         }
     }
 
+    /**
+     * Ouverture du panneau des requêtes préprogrammées.
+     *
+     * Les requêtes sont triées par ordre alphabétique des libellés.
+     *
+     * @param event
+     */
     @FXML
     private void openDefaultSQLQuery(ActionEvent event){
         final List<SQLQuery> queries;
         try {
-            queries = SQLQueries.defaultQueries();
+            queries = SQLQueries.preprogrammedQueries();
         } catch (IOException ex) {
             SIRS.LOGGER.log(Level.WARNING, ex.getMessage(), ex);
             GeotkFX.newExceptionDialog("Une erreur s'est produite pendant le chargement des requêtes préprogrammées.", ex).show();
@@ -435,13 +450,22 @@ public class FXSearchPane extends BorderPane {
         showQueryTable(queries, false);
     }
 
+    /**
+     * Ouverture du panneau des requêtes utilisateur enregistrées soit localement soit en base document.
+     *
+     * Les requêtes sont triées par ordre alphabétique des libellés.
+     *
+     * @param event
+     */
     @FXML
     private void openSQLQuery(ActionEvent event){
         final List<SQLQuery> queries;
         try {
             queries = SQLQueries.getLocalQueries();
-            final SQLQueryRepository repo = (SQLQueryRepository) Injector.getSession().getRepositoryForClass(SQLQuery.class);
-            queries.addAll(repo.getAll());
+            queries.addAll(SQLQueries.dbQueries());
+
+            // il faut refaire un tri général des requêtes
+            queries.sort(SQLQueries.QUERY_COMPARATOR);
         } catch (IOException ex) {
             SIRS.LOGGER.log(Level.WARNING, ex.getMessage(), ex);
             GeotkFX.newExceptionDialog("Une erreur s'est produite pendant la création de la liste des requêtes.", ex).show();
@@ -480,6 +504,7 @@ public class FXSearchPane extends BorderPane {
             pane.setContent(table);
             dia.setDialogPane(pane);
             dia.setTitle("Liste des requêtes");
+            dia.setResizable(true);
 
             final Optional res = dia.showAndWait();
             if (editable) {
@@ -736,7 +761,7 @@ public class FXSearchPane extends BorderPane {
             accordion.getPanes().add(errorPane);
             VBox vBox = new VBox(10, errorLabel, accordion);
             vBox.setPadding(new Insets(10));
-            setCenter(vBox);
+            resultPane.setCenter(vBox);
         });
     }
 
@@ -761,7 +786,7 @@ public class FXSearchPane extends BorderPane {
         final ObjectTable table = new ObjectTable(ElementHit.class, "Résultats");
         table.setTableItems(results);
         uiNbResults.setText(results.size()+" résultat(s).");
-        setCenter(table);
+        resultPane.setCenter(table);
     }
 
     private void searchDesignation() {
@@ -769,7 +794,7 @@ public class FXSearchPane extends BorderPane {
         if (designation == null || designation.isEmpty()) {
             final Label label = new Label("Veuillez spécifier la désignation à chercher");
             label.setTextFill(javafx.scene.paint.Color.DARKRED);
-            setCenter(label);
+            resultPane.setCenter(label);
             return;
         }
 
@@ -777,7 +802,7 @@ public class FXSearchPane extends BorderPane {
         if (typeClass == null) {
             final Label label = new Label("Veuillez spécifier un type d'objet pour la recherche");
             label.setTextFill(javafx.scene.paint.Color.DARKRED);
-            setCenter(label);
+            resultPane.setCenter(label);
             return;
         }
 
@@ -790,7 +815,7 @@ public class FXSearchPane extends BorderPane {
         table.setTableItems(result);
         uiNbResults.setText(String.valueOf(result.size()).concat(" résultat(s)."));
 
-        setCenter(table);
+        resultPane.setCenter(table);
     }
 
     private void searchSQL(String query) {
@@ -798,7 +823,7 @@ public class FXSearchPane extends BorderPane {
         t.setOnSucceeded(evt -> Platform.runLater(() -> {
             final FeatureMapLayer layer = t.getValue();
             if (layer == null || layer.getCollection().isEmpty()) {
-                setCenter(new Label("Pas de résultat pour votre recherche."));
+                resultPane.setCenter(new Label("Pas de résultat pour votre recherche."));
                 uiNbResults.setText("0 résultat.");
             } else {
                 final CustomizedFeatureTable table = new CustomizedFeatureTable(MODEL_PACKAGE + ".", Locale.getDefault(), Thread.currentThread().getContextClassLoader());
@@ -829,11 +854,10 @@ public class FXSearchPane extends BorderPane {
                 table.setTop(box);
                 table.setLoadAll(true);
                 table.init(layer);
-                setCenter(table);
+                resultPane.setCenter(table);
                 uiNbResults.setText(layer.getCollection().size() + " résultat(s).");
             }
         }));
-
         t.setOnFailed(evt -> displayError(t.getException()));
         TaskManager.INSTANCE.submit(t);
     }
@@ -867,7 +891,7 @@ public class FXSearchPane extends BorderPane {
             geomType = null;
         }
 
-        return CorePlugin.createDefaultStyle(Color.GRAY, (geomType == null)? null : geomType.getName().toString());
+        return CorePlugin.createDefaultStyle(Color.GRAY, (geomType == null)? null : geomType.getName().toString(), false);
     }
 
     private Optional<Task> export(final FeatureMapLayer layer) {

@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -49,6 +49,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javafx.beans.property.ObjectProperty;
 import javafx.geometry.Insets;
 
 /**
@@ -87,7 +88,7 @@ public final class DocumentsTheme extends AbstractPluginsButtonTheme {
         final ListDocumentListener<ObligationReglementaire> oblListener =
                 new ListDocumentListener<>(ObligationReglementaire.class, allObls);
         Injector.getBean(DocumentChangeEmiter.class).addListener(oblListener);
-        final ObligationsPojoTable obligationsPojoTable = new ObligationsPojoTable();
+        final ObligationsPojoTable obligationsPojoTable = new ObligationsPojoTable((ObjectProperty<? extends Element>) null);
         obligationsPojoTable.setTableItems(() -> (ObservableList) allObls);
         obligationsPojoTable.editableProperty().bind(editModeOR.editionState());
         obligationsTab.setContent(new BorderPane(obligationsPojoTable, topORPane, null, null, null));
@@ -107,7 +108,7 @@ public final class DocumentsTheme extends AbstractPluginsButtonTheme {
         final ListDocumentListener<EtapeObligationReglementaire> etapeListener =
                 new ListDocumentListener<>(EtapeObligationReglementaire.class, allEtapes);
         Injector.getBean(DocumentChangeEmiter.class).addListener(etapeListener);
-        final EtapesPojoTable etapesPojoTable = new EtapesPojoTable(tabPane);
+        final EtapesPojoTable etapesPojoTable = new EtapesPojoTable(tabPane, (ObjectProperty<? extends Element>) null);
         etapesPojoTable.setTableItems(() -> (ObservableList) allEtapes);
         etapesPojoTable.editableProperty().bind(editEtapeMode.editionState());
         etapesTab.setContent(new BorderPane(etapesPojoTable, topEtapePane, null, null, null));

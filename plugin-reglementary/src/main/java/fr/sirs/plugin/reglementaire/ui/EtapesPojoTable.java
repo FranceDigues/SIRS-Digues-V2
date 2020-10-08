@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -21,11 +21,13 @@ package fr.sirs.plugin.reglementaire.ui;
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
 import fr.sirs.core.component.EtapeObligationReglementaireRepository;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.EtapeObligationReglementaire;
 import fr.sirs.core.model.PlanificationObligationReglementaire;
 import fr.sirs.theme.ui.PojoTable;
 import fr.sirs.util.FXFreeTab;
 import fr.sirs.util.SimpleFXEditMode;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.scene.control.Button;
@@ -55,15 +57,15 @@ public class EtapesPojoTable extends PojoTable {
 
     private final CheckBox uiHideRealizedCheckBox = new CheckBox("Masquer les étapes réalisées");
 
-    public EtapesPojoTable(final TabPane tabPane) {
-        super(EtapeObligationReglementaire.class, "Etapes d'obligations réglementaires");
+    public EtapesPojoTable(final TabPane tabPane, final ObjectProperty<? extends Element> container) {
+        super(EtapeObligationReglementaire.class, "Etapes d'obligations réglementaires", container, false);
         // Ajout de la colonne de duplication
         getColumns().add(2, new DuplicateEtapeColumn());
 
         final Button uiPlanificationBtn = new Button(null, new ImageView(SIRS.ICON_CLOCK_WHITE));
         uiPlanificationBtn.getStyleClass().add(BUTTON_STYLE);
         uiPlanificationBtn.setTooltip(new Tooltip("Planification automatique"));
-        uiPlanificationBtn.setOnMouseClicked(event -> showPlanificationTable(tabPane));
+        uiPlanificationBtn.setOnMouseClicked(event -> showPlanificationTable(tabPane, null));
         searchEditionToolbar.getChildren().add(1, uiPlanificationBtn);
 
         if (getFilterUI() instanceof VBox) {
@@ -71,6 +73,9 @@ public class EtapesPojoTable extends PojoTable {
             vbox.getChildren().add(vbox.getChildren().size() - 1, uiHideRealizedCheckBox);
             uiHideRealizedCheckBox.setStyle("-fx-text-fill: #FFF");
         }
+        
+        applyPreferences();
+        listenPreferences();
     }
 
     @Override
@@ -100,7 +105,7 @@ public class EtapesPojoTable extends PojoTable {
      //     *
      //     * @param tabPane Le conteneur d'onglet dans lequel ajouter ce nouvel onglet.
      //     */
-    private void showPlanificationTable(final TabPane tabPane) {
+    private void showPlanificationTable(final TabPane tabPane, final ObjectProperty<? extends Element> container) {
         final FXFreeTab planTab = new FXFreeTab("Planification");
         // Gestion du bouton consultation / édition pour la pojo table
         final Separator separator = new Separator();
@@ -109,7 +114,7 @@ public class EtapesPojoTable extends PojoTable {
         final HBox topPane = new HBox(separator, editMode);
         HBox.setHgrow(separator, Priority.ALWAYS);
         final PojoTable pojoTable = new PojoTable(Injector.getSession().getRepositoryForClass(
-                PlanificationObligationReglementaire.class), "Planification(s) programmée(s)");
+                PlanificationObligationReglementaire.class), "Planification(s) programmée(s)", container);
         pojoTable.editableProperty().bind(editMode.editionState());
         planTab.setContent(new BorderPane(pojoTable, topPane, null, null, null));
         tabPane.getTabs().add(planTab);

@@ -20,6 +20,8 @@ package fr.sirs.other;
 
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
+import static fr.sirs.SIRS.ICON_EXCLAMATION_CIRCLE;
+import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.component.ReferenceUsageRepository;
 import fr.sirs.core.model.LabelMapper;
 import fr.sirs.core.model.ReferenceType;
@@ -33,14 +35,19 @@ import java.util.logging.Level;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.concurrent.Task;
+import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import static javafx.scene.layout.Region.USE_COMPUTED_SIZE;
 import org.ektorp.DbAccessException;
 import org.geotoolkit.gui.javafx.util.ButtonTableCell;
@@ -53,21 +60,91 @@ import org.geotoolkit.gui.javafx.util.TaskManager;
  */
 public class FXReferenceAnalysePane extends BorderPane {
 
+    private final ReferenceType reference;
+    private final Label uiCount = new Label();
+    
     public FXReferenceAnalysePane(final ReferenceType reference) {
+        
+        this.reference = reference;
+        
+        // 1- Mise en forme du titre avec le nom de la référence, le nombre d'utilisations et un bouton de suppression
+        //============================================================================================================
         final LabelMapper mapper = LabelMapper.get(reference.getClass());
-        final Label uiTitle = new Label(new StringBuilder("Usages dans la base de la référence \"").append(reference.getLibelle()).append("\" (").append(mapper.mapClassName()).append(")").toString());
+        final Label uiTitle = new Label(new StringBuilder("Usages dans la base de la référence \"")
+                .append(reference.getLibelle())
+                .append("\" (").append(mapper.mapClassName()).append(")").toString());
         uiTitle.getStyleClass().add("pojotable-header");
         uiTitle.setAlignment(Pos.CENTER);
         uiTitle.setPadding(new Insets(5));
         uiTitle.setPrefWidth(USE_COMPUTED_SIZE);
-        setTop(uiTitle);
+        
+        // libellé du décompte du nombre d'utilisations
+        uiCount.getStyleClass().add("pojotable-header");
+        uiCount.setAlignment(Pos.CENTER);
+        uiCount.setPadding(new Insets(5));
+        uiCount.setPrefWidth(USE_COMPUTED_SIZE);
+        // bouton de suppression de la référence
+        final Button uiDeleteReference = new Button("Supprimer la référence", new ImageView(ICON_EXCLAMATION_CIRCLE));
+        
+        
+        // 3- Action de suppression de la référence
+        //=========================================
+        uiDeleteReference.setOnAction((ActionEvent event) -> {
+            
+            // On recalcule l'utilisation de la référence
+            final List<ReferenceUsage> usage = getUsage(reference);
+            
+            // On vérifie que l'identifiant de la référence n'est utilisé que par elle-même.
+            if(usage.size()==1 && reference.getId().equals(usage.get(0).getObjectId())){
+                
+                // on supprime la référence de la base
+                ((AbstractSIRSRepository) Injector.getSession().getRepositoryForClass(reference.getClass())).remove(reference);
+                
+                new Alert(Alert.AlertType.CONFIRMATION, "La référence a été supprimée de la base locale.", ButtonType.CLOSE).showAndWait();
+                
+                // On met à jour le contenu du tableau
+                Injector.getSession().getTaskManager().submit(newRefreshTask());
+            }
+            else if (usage.size()==0){
+                new Alert(Alert.AlertType.INFORMATION, "La référence a déjà été supprimée de la base locale.", ButtonType.OK).showAndWait();
+            }
+            else {
+                // Sinon, on refuse la suppression de la référence
+                new Alert(Alert.AlertType.ERROR, "Pour des raisons de cohérence des données,\n "
+                        + "il est impossible de supprimer des références utilisées par des documents depuis l'application.\n "
+                        + "Si vous souhaitez vraiment supprimer cette référence,\n veuillez supprimer directement le document"
+                        + " "+reference.getId()+" dans la base de données.", 
+                        ButtonType.CLOSE).showAndWait();
+            }
+        });
+        
+        // 4- Mise en page des éléments graphiques
+        //========================================
+        final HBox hBox = new HBox(uiTitle, uiCount, uiDeleteReference);
+        hBox.setSpacing(20);
+        setTop(hBox);
 
-        // Compute statistics for queried reference.
+        // 5- Calcul initial de l'utilisation de la référence
+        //===================================================
+        Injector.getSession().getTaskManager().submit(newRefreshTask());
+    }
+    
+    /**
+     * Tâche de calcul de l'utilisation de la référence avec raffraîchissement de l'UI.
+     */
+    private Task<List<ReferenceUsage>> newRefreshTask(){
         final Task<List<ReferenceUsage>> task = new TaskManager.MockTask(
                 "Recherche de l'utilisation d'une référence.",
                 () -> getUsage(reference));
-        task.setOnSucceeded(evt -> SIRS.fxRun(false, () -> displayReferences(task.getValue())));
-        Injector.getSession().getTaskManager().submit(task);
+        
+        // À l'issue du calcul, on met à jour la liste des utilisations de la référence ainsi que le décompte.
+        task.setOnSucceeded(evt -> SIRS.fxRun(false, () -> {
+            final List<ReferenceUsage> value = task.getValue();
+            displayReferences(value);
+            uiCount.setText(String.valueOf(value.size()));
+                }));
+        
+        return task;
     }
 
     /**

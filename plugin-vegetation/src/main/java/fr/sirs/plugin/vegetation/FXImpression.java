@@ -459,14 +459,20 @@ public class FXImpression extends GridPane{
     }
 
     private static MapLayer createOSMLayer() throws MalformedURLException, DataStoreException{
-        final CoverageStore store = new OSMTileMapClient(new URL("http://tile.openstreetmap.org"), null, 18, true);
+//        final CoverageStore store = new OSMTileMapClient(new URL("http://tile.openstreetmap.org"), null, 18, true);
+//        final CoverageStore store = new OSMTileMapClient(new URL("http://c.tile.stamen.com/terrain"), null, 18, true);
+        final CoverageStore store = new OSMTileMapClient(new URL("http://c.tile.stamen.com/toner"), null, 18, true);
         for (GenericName n : store.getNames()) {
             final CoverageReference cr = store.getCoverageReference(n);
             final CoverageMapLayer cml = MapBuilder.createCoverageLayer(cr);
-            cml.setName("Open Street Map");
+            cml.setName("Stamen");
             cml.setDescription(new DefaultDescription(
-                    new SimpleInternationalString("Open Street Map"),
-                    new SimpleInternationalString("Open Street Map")));
+                    new SimpleInternationalString("Stamen"),
+                    new SimpleInternationalString("Stamen")));
+//            cml.setName("Open Street Map");
+//            cml.setDescription(new DefaultDescription(
+//                    new SimpleInternationalString("Open Street Map"),
+//                    new SimpleInternationalString("Open Street Map")));
             cml.setOpacity(0.4);
             return cml;
         }

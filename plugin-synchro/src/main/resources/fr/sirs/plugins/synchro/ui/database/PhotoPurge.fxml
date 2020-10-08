@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<fx:root   prefHeight="350.0" prefWidth="500.0" stylesheets="@../../MobilePluginStyle.css" type="StackPane" xmlns="http://javafx.com/javafx/8.0.171" xmlns:fx="http://javafx.com/fxml/1">
+   <children>
+      <TitledPane styleClass="header" text="Maintenance photographies">
+         <content>
+            <VBox fx:id="uiForm" spacing="10.0">
+               <children>
+                  <HBox fx:id="uiDateBox" alignment="CENTER_LEFT" spacing="5.0" visible="false">
+                     <children>
+                        <RadioButton fx:id="uiDateTrigger" mnemonicParsing="false" text="Photographies publiées depuis :" />
+                        <DatePicker fx:id="uiDate" />
+                     </children>
+                  </HBox>
+                  <HBox alignment="CENTER_LEFT" spacing="10.0">
+                     <children>
+                        <Label text="Volume présent en base de données" />
+                        <Separator visible="false" HBox.hgrow="ALWAYS" />
+                        <Button fx:id="uiEstimate" mnemonicParsing="false" onAction="#estimate" text="Estimer" />
+                     </children>
+                  </HBox>
+                  <HBox alignment="CENTER_LEFT">
+                     <children>
+                        <Label text="Nombre approximatif :" />
+                        <Label fx:id="uiNb" text="N/A" />
+                     </children>
+                  </HBox>
+                  <HBox>
+                     <children>
+                        <Label text="Taille estimée :" />
+                        <Label fx:id="uiSize" maxHeight="-Infinity" maxWidth="-Infinity" minHeight="0.0" minWidth="0.0" text="N/A" />
+                     </children>
+                  </HBox>
+                  <HBox alignment="CENTER_LEFT" spacing="10.0">
+                     <children>
+                        <Label text="Compaction manuelle : " />
+                        <Separator visible="false" HBox.hgrow="ALWAYS" />
+                        <Button fx:id="uiCompact" mnemonicParsing="false" text="Compacter" />
+                     </children>
+                  </HBox>
+                  <Label maxHeight="1.7976931348623157E308" maxWidth="600.0" styleClass="warn-label" text="Attention, en cliquant sur 'Purger', vous supprimerez toutes les photographies encore présentes dans la base de données" textAlignment="CENTER" wrapText="true" />
+                  <HBox alignment="CENTER_RIGHT" maxWidth="1.7976931348623157E308" minWidth="10.0" spacing="10.0">
+                     <children>
+                        <Button fx:id="uiImportBtn" mnemonicParsing="false" onAction="#purgePhotos" text="Purger" HBox.hgrow="NEVER" />
+                     </children>
+                  </HBox>
+               </children>
+            </VBox>
+         </content>
+      </TitledPane>
+      <VBox fx:id="uiProgressPane" alignment="CENTER" visible="false" StackPane.alignment="CENTER">
+         <children>
+            <ProgressIndicator VBox.vgrow="ALWAYS" />
+            <Label fx:id="uiProgressLabel" />
+            <Button fx:id="uiCancel" mnemonicParsing="false" text="Annuler" />
+         </children>
+         <padding>
+            <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
+         </padding>
+      </VBox>
+   </children>
+</fx:root>

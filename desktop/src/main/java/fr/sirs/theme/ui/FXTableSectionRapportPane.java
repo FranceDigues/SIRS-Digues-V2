@@ -18,14 +18,12 @@
  */
 package fr.sirs.theme.ui;
 
-import fr.sirs.Injector;
 import fr.sirs.SIRS;
 import fr.sirs.core.model.SQLQueries;
 import fr.sirs.core.model.SQLQuery;
 import fr.sirs.core.model.report.TableSectionRapport;
 import fr.sirs.query.FXSearchPane;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
@@ -99,12 +97,14 @@ public class FXTableSectionRapportPane extends AbstractFXElementPane<TableSectio
 
     @FXML
     private void chooseQuery(ActionEvent event) throws IOException {
-        final List<SQLQuery> queries = new ArrayList<>(Injector.getSession().getRepositoryForClass(SQLQuery.class).getAll());
-        queries.addAll(SQLQueries.defaultQueries());
+        final List<SQLQuery> queries = SQLQueries.dbQueries();
+        queries.addAll(SQLQueries.preprogrammedQueries());
+        queries.sort(SQLQueries.QUERY_COMPARATOR);
 
         final Optional<SQLQuery> query = FXSearchPane.chooseSQLQuery(queries);
-        if (query.isPresent())
+        if (query.isPresent()){
             queryProperty.set(query.get());
+        }
     }
 
     @FXML

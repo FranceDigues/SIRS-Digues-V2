@@ -27,6 +27,7 @@ import static fr.sirs.SIRS.SIRSDOCUMENT_REFERENCE;
 import fr.sirs.core.SirsCore;
 import static fr.sirs.core.SirsCore.MODEL_PACKAGE;
 import fr.sirs.core.TronconUtils;
+import fr.sirs.core.component.DatabaseRegistry;
 import fr.sirs.core.component.TronconDigueRepository;
 import fr.sirs.core.model.AbstractPositionDocument;
 import fr.sirs.core.model.AbstractPositionDocumentAssociable;
@@ -58,6 +59,7 @@ import fr.sirs.core.model.OuvrageVoirie;
 import fr.sirs.core.model.PiedDigue;
 import fr.sirs.core.model.PositionDocument;
 import fr.sirs.core.model.PositionProfilTravers;
+import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.Prestation;
 import fr.sirs.core.model.Preview;
 import fr.sirs.core.model.ProfilLong;
@@ -79,9 +81,13 @@ import fr.sirs.core.model.VoieAcces;
 import fr.sirs.core.model.VoieDigue;
 import fr.sirs.digue.DiguesTab;
 import fr.sirs.migration.HtmlRemoval;
+import fr.sirs.migration.upgrade.v2and23.UpgradeLink1NtoNN;
+import fr.sirs.migration.upgrade.v2and23.UpgradePrestationsCoordinates;
+import fr.sirs.migration.upgrade.v2and23.Upgrades1NtoNNSupported;
 import fr.sirs.theme.ContactsTheme;
 import fr.sirs.theme.DocumentTheme;
 import fr.sirs.theme.EvenementsHydrauliquesTheme;
+import fr.sirs.theme.GlobalPrestationTheme;
 import fr.sirs.theme.PositionDocumentTheme;
 import fr.sirs.theme.Theme;
 import fr.sirs.theme.TronconTheme;
@@ -94,7 +100,9 @@ import java.net.URISyntaxException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -172,6 +180,20 @@ public class CorePlugin extends Plugin {
     public static final String BORNE_LAYER_NAME = "Bornes";
     private static final FilterFactory2 FF = GO2Utilities.FILTER_FACTORY;
     private static final MutableStyleFactory SF = GO2Utilities.STYLE_FACTORY;
+
+    /**
+     * Expression renvoyant un segment à partir des positions ponctuelles
+     * de début et de fin de l'élément {@link Positionable} sur lequel
+     * l'expression s'applique.
+     */
+    private static final PointsToLine POINTS_TO_LINE  = new PointsToLine(FF.property(SirsCore.POSITION_DEBUT_FIELD),  FF.property(SirsCore.POSITION_FIN_FIELD));
+
+    /**
+     * Expression renvoyant le centroïd du segment formé par les positions
+     * ponctuelles de début et de fin de l'élément {@link Positionable} sur
+     * lequel l'expression s'applique.
+     */
+    private static final Expression POINTS_TO_CENTER = new PointsToCenter(POINTS_TO_LINE);
 
     /**
      * Plugin correspondant au desktop et au launcher.
@@ -674,6 +696,7 @@ public class CorePlugin extends Plugin {
         themes.add(new DocumentTheme<>("Marché", Marche.class));
         themes.add(new DocumentTheme<>("Rapport d'étude", RapportEtude.class));
         themes.add(new DocumentTheme<>("Document à grande échelle", DocumentGrandeEchelle.class));
+        themes.add(new GlobalPrestationTheme());
     }
 
     @Override
@@ -701,23 +724,6 @@ public class CorePlugin extends Plugin {
                 STROKE_JOIN_BEVEL, STROKE_CAP_SQUARE, null,LITERAL_ZERO_FLOAT);
         final LineSymbolizer line3 = SF.lineSymbolizer("symbol",
                 (String)null,DEFAULT_DESCRIPTION,Units.POINT,stroke3,LITERAL_ONE_FLOAT);
-
-//        final Expression size = GO2Utilities.FILTER_FACTORY.literal(18);
-//        final List<GraphicalSymbol> symbols = new ArrayList<>();
-//        final GraphicalSymbol external = SF.externalGraphic(
-//                    SF.onlineResource(CorePlugin.class.getResource("/fr/sirs/arrow-white.png").toURI()),
-//                    "image/png",null);
-//        symbols.add(external);
-//        final Graphic graphic = SF.graphic(symbols, LITERAL_ONE_FLOAT,
-//                size, DEFAULT_GRAPHIC_ROTATION, DEFAULT_ANCHOR_POINT, DEFAULT_DISPLACEMENT);
-//
-//        final Expression initialGap = FF.literal(10);
-//        final Expression strokeGap = FF.literal(100);
-//        final GraphicStroke graphicStroke = SF.graphicStroke(graphic,strokeGap,initialGap);
-//
-//        final Stroke gstroke = SF.stroke(graphicStroke,DEFAULT_FILL_COLOR,LITERAL_ONE_FLOAT,LITERAL_ONE_FLOAT,
-//                STROKE_JOIN_BEVEL,STROKE_CAP_ROUND,null,LITERAL_ZERO_FLOAT);
-//        final LineSymbolizer direction = SF.lineSymbolizer("",(Expression)null,null,null,gstroke,null);
 
         return SF.style(line1,line2,line3);
     }
@@ -865,6 +871,10 @@ public class CorePlugin extends Plugin {
     }
 
     public static MutableStyle createDefaultSelectionStyle(){
+        return createDefaultSelectionStyle(false);
+    }
+
+    public static MutableStyle createDefaultSelectionStyle(final boolean withRealPosition){
         // Stroke to use for lines and point perimeter
         final Stroke stroke = SF.stroke(SF.literal(Color.GREEN),LITERAL_ONE_FLOAT,FF.literal(13),
                 STROKE_JOIN_BEVEL, STROKE_CAP_BUTT, null,LITERAL_ZERO_FLOAT);
@@ -899,6 +909,10 @@ public class CorePlugin extends Plugin {
         );
 
         final MutableFeatureTypeStyle fts = SF.featureTypeStyle();
+        if(withRealPosition) {
+
+            addRealPositionStyles(fts,  Color.GREEN);
+        }
         fts.rules().add(ruleLongObjects);
         fts.rules().add(ruleSmallObjects);
 
@@ -908,15 +922,32 @@ public class CorePlugin extends Plugin {
     }
 
     public static MutableStyle createDefaultStyle(Color col) {
-        return createDefaultStyle(col, null);
+        return createDefaultStyle(col, null, false);
     }
 
-    public static MutableStyle createDefaultStyle(Color col, final String geometryName) {
-        final Stroke line1Stroke = SF.stroke(SF.literal(col),LITERAL_ONE_FLOAT,GO2Utilities.FILTER_FACTORY.literal(8),
+    /**
+     * Création d'un style permettant d'afficher les positions dites "réelles"
+     * de la couleur indiquée par le paramètre.
+     *
+     * @param color : couleur à affecter au style
+     * @return
+     */
+    public static MutableStyle createRealPositionStyle(final Color color) {
+
+        final MutableFeatureTypeStyle fts = SF.featureTypeStyle();
+        addRealPositionStyles(fts, color);
+
+        final MutableStyle style = SF.style();
+        style.featureTypeStyles().add(fts);
+        return style;
+    }
+
+    public static MutableStyle createDefaultStyle(final Color color, final String geometryName, final boolean withRealPosition) {
+
+        final Stroke line1Stroke = SF.stroke(SF.literal(color),LITERAL_ONE_FLOAT,GO2Utilities.FILTER_FACTORY.literal(8),
                 STROKE_JOIN_BEVEL, STROKE_CAP_ROUND, null,LITERAL_ZERO_FLOAT);
         final LineSymbolizer line1 = SF.lineSymbolizer("symbol",
                 geometryName,DEFAULT_DESCRIPTION,Units.POINT,line1Stroke,LITERAL_ZERO_FLOAT);
-
 
         final Stroke line2Stroke = SF.stroke(SF.literal(Color.BLACK),LITERAL_ONE_FLOAT,GO2Utilities.FILTER_FACTORY.literal(1),
                 STROKE_JOIN_BEVEL, STROKE_CAP_ROUND, null,LITERAL_ZERO_FLOAT);
@@ -928,7 +959,7 @@ public class CorePlugin extends Plugin {
 
         final List<GraphicalSymbol> symbols = new ArrayList<>();
         final Stroke stroke = null;
-        final Fill fill = SF.fill(col);
+        final Fill fill = SF.fill(color);
         final Mark mark = SF.mark(StyleConstants.MARK_TRIANGLE, fill, stroke);
         symbols.add(mark);
         final Graphic graphic = SF.graphic(symbols, LITERAL_ONE_FLOAT,
@@ -953,12 +984,89 @@ public class CorePlugin extends Plugin {
         );
 
         final MutableFeatureTypeStyle fts = SF.featureTypeStyle();
+//        // test et préparation pour SYM-1776
+        if(withRealPosition) {
+            addRealPositionStyles(fts, color);
+        }
+
         fts.rules().add(ruleLongObjects);
         fts.rules().add(ruleSmallObjects);
 
         final MutableStyle style = SF.style();
         style.featureTypeStyles().add(fts);
         return style;
+    }
+
+    /**
+     * Ajout des règles de styles associées aux positions dites "réelles".
+     * La {@linkplain MutableRule règle} 'short' sert à représenter les éléments
+     * ponctuels; la {@linkplain MutableRule règle} 'long' sert à représenter
+     * les éléments linéaires.
+     *
+     * @param fts
+     * @param color
+     */
+    private static void addRealPositionStyles(final MutableFeatureTypeStyle fts, final Color color) {
+        try {
+
+            final MutableRule shortRule = createExactShortRule(SirsCore.POSITION_DEBUT_FIELD, color, StyleConstants.MARK_TRIANGLE);
+            final MutableRule longRule  = createExactLongRule(SirsCore.POSITION_DEBUT_FIELD, SirsCore.POSITION_FIN_FIELD, color, StyleConstants.MARK_TRIANGLE);
+
+            longRule.setFilter(
+                    FF.greater(
+                            FF.function("length", FF.property("geometry")),
+                            FF.literal(SirsCore.LINE_MIN_LENGTH)
+                    )
+            );
+
+            shortRule.setFilter(
+                    FF.lessOrEqual(
+                            FF.function("length", FF.property("geometry")),
+                            FF.literal(SirsCore.LINE_MIN_LENGTH)
+                    )
+            );
+
+            fts.rules().add(shortRule);
+            fts.rules().add(longRule);
+
+        } catch (Exception e) {
+            SirsCore.LOGGER.log(Level.WARNING, NAME, e);
+        }
+    }
+
+    private static PointSymbolizer createExactPointSymbolizer(final String pointName, final String geometryProperty, final Color color, final Expression wellKnownName){
+        return SF.pointSymbolizer(pointName, geometryProperty, DEFAULT_DESCRIPTION, Units.POINT,
+                        SF.graphic(Arrays.asList(SF.mark(wellKnownName, SF.fill(Color.WHITE), SF.stroke(color, 2))),
+                                LITERAL_ONE_FLOAT, GO2Utilities.FILTER_FACTORY.literal(20), LITERAL_ONE_FLOAT, DEFAULT_ANCHOR_POINT, DEFAULT_DISPLACEMENT));
+    }
+
+    public static MutableRule createExactLongRule(final String geometryStartProperty, final String geometryEndProperty, final Color color, final Expression wellKnownName){
+
+        final Stroke realLineStroke = SF.stroke(SF.literal(color), LITERAL_ONE_FLOAT, GO2Utilities.FILTER_FACTORY.literal(5),
+                STROKE_JOIN_BEVEL, STROKE_CAP_ROUND, new float[]{15.f, 15.f}, LITERAL_ZERO_FLOAT);
+
+        final LineSymbolizer lineReal = SF.lineSymbolizer("symbol",
+                POINTS_TO_LINE,
+                DEFAULT_DESCRIPTION, Units.POINT, realLineStroke, LITERAL_ZERO_FLOAT);
+
+        final TextSymbolizer centeredDesignation = SF.textSymbolizer("designation", POINTS_TO_CENTER, DEFAULT_DESCRIPTION, null,
+                FF.property("designation"), DEFAULT_FONT, StyleConstants.DEFAULT_POINTPLACEMENT, SF.halo(Color.WHITE, 2), SF.fill(color));
+
+        return SF.rule(
+                lineReal,
+                createExactPointSymbolizer("start", geometryStartProperty, color, wellKnownName),//Point de départ
+                createExactPointSymbolizer(  "end", geometryEndProperty, color, wellKnownName),//Point de fin
+                centeredDesignation
+        );
+    }
+
+    public static MutableRule createExactShortRule(final String geometryStartProperty, final Color color, final Expression wellKnownName){
+
+        return SF.rule(
+                createExactPointSymbolizer("start", geometryStartProperty, color, wellKnownName),
+                SF.textSymbolizer(SF.fill(color), DEFAULT_FONT, SF.halo(Color.WHITE, 1), FF.property("designation"),
+                        StyleConstants.DEFAULT_POINTPLACEMENT, geometryStartProperty)
+        );
     }
 
     private class ViewFormItem extends MenuItem {
@@ -1070,11 +1178,20 @@ public class CorePlugin extends Plugin {
     }
 
     @Override
-    public Optional<Task> findUpgradeTask(int fromMajor, int fromMinor, CouchDbConnector dbConnector) {
+    public void findUpgradeTasks(final int fromMajor, final int fromMinor, final CouchDbConnector dbConnector, final LinkedHashSet<Task> upgradeTasks, final DatabaseRegistry... dbRegistry) {
+
         if (fromMajor < 2 || (fromMajor == 2 && fromMinor < 7)) {
-            return Optional.of(new HtmlRemoval(dbConnector, "commentaire"));
+            upgradeTasks.add(new HtmlRemoval(dbConnector, "commentaire"));
+            findUpgradeTasks(2, 7, dbConnector, upgradeTasks); //Reccursive call to findUpgradeTasks from the 2.7 version of the plugin reached with the previous Task.
+            return;
+        } else if (fromMajor < 2 || (fromMajor == 2 && fromMinor < 23)) {
+            upgradeTasks.add(new UpgradeLink1NtoNN(dbRegistry[0], dbConnector.getDatabaseName(), Upgrades1NtoNNSupported.DESORDRE));
+            upgradeTasks.add(new UpgradePrestationsCoordinates(dbRegistry[0], dbConnector.getDatabaseName(), 2,23));
+            findUpgradeTasks(2, 23, dbConnector, upgradeTasks); //Reccursive call to findUpgradeTasks from the 2.23 version of the plugin reached with the previous Task.
+            return;
+
         }
 
-        return super.findUpgradeTask(fromMajor, fromMinor, dbConnector);
+        super.findUpgradeTasks(fromMajor, fromMinor, dbConnector, upgradeTasks);
     }
 }

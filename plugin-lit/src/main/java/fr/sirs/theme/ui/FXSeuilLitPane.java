@@ -220,85 +220,85 @@ public class FXSeuilLitPane  extends AbstractFXElementPane<SeuilLit> {
         ui_geometrieCreteId_link.setVisible(false);
         ui_profilCoursierId.disableProperty().bind(disableFieldsProperty());
         ui_profilCoursierId_link.setVisible(false);
-        plansTable = new PojoTable(PlanSeuilLit.class, null);
+        plansTable = new PojoTable(PlanSeuilLit.class, null, elementProperty());
         plansTable.editableProperty().bind(disableFieldsProperty().not());
         ui_plans.setContent(plansTable);
         ui_plans.setClosable(false);
-        voieAccesIdsTable = new ListeningPojoTable(VoieAcces.class, null);
+        voieAccesIdsTable = new ListeningPojoTable(VoieAcces.class, null, elementProperty());
         voieAccesIdsTable.editableProperty().bind(disableFieldsProperty().not());
         voieAccesIdsTable.createNewProperty().set(false);
         ui_voieAccesIds.setContent(voieAccesIdsTable);
         ui_voieAccesIds.setClosable(false);
-        ouvrageFranchissementIdsTable = new ListeningPojoTable(OuvrageFranchissement.class, null);
+        ouvrageFranchissementIdsTable = new ListeningPojoTable(OuvrageFranchissement.class, null, elementProperty());
         ouvrageFranchissementIdsTable.editableProperty().bind(disableFieldsProperty().not());
         ouvrageFranchissementIdsTable.createNewProperty().set(false);
         ui_ouvrageFranchissementIds.setContent(ouvrageFranchissementIdsTable);
         ui_ouvrageFranchissementIds.setClosable(false);
-        voieDigueIdsTable = new ListeningPojoTable(VoieDigue.class, null);
+        voieDigueIdsTable = new ListeningPojoTable(VoieDigue.class, null, elementProperty());
         voieDigueIdsTable.editableProperty().bind(disableFieldsProperty().not());
         voieDigueIdsTable.createNewProperty().set(false);
         ui_voieDigueIds.setContent(voieDigueIdsTable);
         ui_voieDigueIds.setClosable(false);
-        ouvrageVoirieIdsTable = new ListeningPojoTable(OuvrageVoirie.class, null);
+        ouvrageVoirieIdsTable = new ListeningPojoTable(OuvrageVoirie.class, null, elementProperty());
         ouvrageVoirieIdsTable.editableProperty().bind(disableFieldsProperty().not());
         ouvrageVoirieIdsTable.createNewProperty().set(false);
         ui_ouvrageVoirieIds.setContent(ouvrageVoirieIdsTable);
         ui_ouvrageVoirieIds.setClosable(false);
-        stationPompageIdsTable = new ListeningPojoTable(StationPompage.class, null);
+        stationPompageIdsTable = new ListeningPojoTable(StationPompage.class, null, elementProperty());
         stationPompageIdsTable.editableProperty().bind(disableFieldsProperty().not());
         stationPompageIdsTable.createNewProperty().set(false);
         ui_stationPompageIds.setContent(stationPompageIdsTable);
         ui_stationPompageIds.setClosable(false);
-        reseauHydrauliqueFermeIdsTable = new ListeningPojoTable(ReseauHydrauliqueFerme.class, null);
+        reseauHydrauliqueFermeIdsTable = new ListeningPojoTable(ReseauHydrauliqueFerme.class, null, elementProperty());
         reseauHydrauliqueFermeIdsTable.editableProperty().bind(disableFieldsProperty().not());
         reseauHydrauliqueFermeIdsTable.createNewProperty().set(false);
         ui_reseauHydrauliqueFermeIds.setContent(reseauHydrauliqueFermeIdsTable);
         ui_reseauHydrauliqueFermeIds.setClosable(false);
-        reseauHydrauliqueCielOuvertIdsTable = new ListeningPojoTable(ReseauHydrauliqueCielOuvert.class, null);
+        reseauHydrauliqueCielOuvertIdsTable = new ListeningPojoTable(ReseauHydrauliqueCielOuvert.class, null, elementProperty());
         reseauHydrauliqueCielOuvertIdsTable.editableProperty().bind(disableFieldsProperty().not());
         reseauHydrauliqueCielOuvertIdsTable.createNewProperty().set(false);
         ui_reseauHydrauliqueCielOuvertIds.setContent(reseauHydrauliqueCielOuvertIdsTable);
         ui_reseauHydrauliqueCielOuvertIds.setClosable(false);
-        ouvrageHydrauliqueAssocieIdsTable = new ListeningPojoTable(OuvrageHydrauliqueAssocie.class, null);
+        ouvrageHydrauliqueAssocieIdsTable = new ListeningPojoTable(OuvrageHydrauliqueAssocie.class, null, elementProperty());
         ouvrageHydrauliqueAssocieIdsTable.editableProperty().bind(disableFieldsProperty().not());
         ouvrageHydrauliqueAssocieIdsTable.createNewProperty().set(false);
         ui_ouvrageHydrauliqueAssocieIds.setContent(ouvrageHydrauliqueAssocieIdsTable);
         ui_ouvrageHydrauliqueAssocieIds.setClosable(false);
-        ouvrageTelecomEnergieIdsTable = new ListeningPojoTable(OuvrageTelecomEnergie.class, null);
+        ouvrageTelecomEnergieIdsTable = new ListeningPojoTable(OuvrageTelecomEnergie.class, null, elementProperty());
         ouvrageTelecomEnergieIdsTable.editableProperty().bind(disableFieldsProperty().not());
         ouvrageTelecomEnergieIdsTable.createNewProperty().set(false);
         ui_ouvrageTelecomEnergieIds.setContent(ouvrageTelecomEnergieIdsTable);
         ui_ouvrageTelecomEnergieIds.setClosable(false);
-        reseauTelecomEnergieIdsTable = new ListeningPojoTable(ReseauTelecomEnergie.class, null);
+        reseauTelecomEnergieIdsTable = new ListeningPojoTable(ReseauTelecomEnergie.class, null, elementProperty());
         reseauTelecomEnergieIdsTable.editableProperty().bind(disableFieldsProperty().not());
         reseauTelecomEnergieIdsTable.createNewProperty().set(false);
         ui_reseauTelecomEnergieIds.setContent(reseauTelecomEnergieIdsTable);
         ui_reseauTelecomEnergieIds.setClosable(false);
-        ouvrageParticulierIdsTable = new ListeningPojoTable(OuvrageParticulier.class, null);
+        ouvrageParticulierIdsTable = new ListeningPojoTable(OuvrageParticulier.class, null, elementProperty());
         ouvrageParticulierIdsTable.editableProperty().bind(disableFieldsProperty().not());
         ouvrageParticulierIdsTable.createNewProperty().set(false);
         ui_ouvrageParticulierIds.setContent(ouvrageParticulierIdsTable);
         ui_ouvrageParticulierIds.setClosable(false);
-        echelleLimnimetriqueIdsTable = new ListeningPojoTable(EchelleLimnimetrique.class, null);
+        echelleLimnimetriqueIdsTable = new ListeningPojoTable(EchelleLimnimetrique.class, null, elementProperty());
         echelleLimnimetriqueIdsTable.editableProperty().bind(disableFieldsProperty().not());
         echelleLimnimetriqueIdsTable.createNewProperty().set(false);
         ui_echelleLimnimetriqueIds.setContent(echelleLimnimetriqueIdsTable);
         ui_echelleLimnimetriqueIds.setClosable(false);
-        desordreIdsTable = new ListeningPojoTable(DesordreLit.class, null);
+        desordreIdsTable = new ListeningPojoTable(DesordreLit.class, null, elementProperty());
         desordreIdsTable.editableProperty().bind(disableFieldsProperty().not());
         desordreIdsTable.createNewProperty().set(false);
         ui_desordreIds.setContent(desordreIdsTable);
         ui_desordreIds.setClosable(false);
-        digueIdsTable = new ListeningPojoTable(Digue.class, null);
+        digueIdsTable = new ListeningPojoTable(Digue.class, null, elementProperty());
         digueIdsTable.editableProperty().bind(disableFieldsProperty().not());
         digueIdsTable.createNewProperty().set(false);
         ui_digueIds.setContent(digueIdsTable);
         ui_digueIds.setClosable(false);
-        inspectionsTable = new PojoTable(InspectionSeuilLit.class, null);
+        inspectionsTable = new PojoTable(InspectionSeuilLit.class, null, elementProperty());
         inspectionsTable.editableProperty().bind(disableFieldsProperty().not());
         ui_inspections.setContent(inspectionsTable);
         ui_inspections.setClosable(false);
-        couchesTable = new PojoTable(CoucheSeuilLit.class, null);
+        couchesTable = new PojoTable(CoucheSeuilLit.class, null, elementProperty());
         couchesTable.editableProperty().bind(disableFieldsProperty().not());
         ui_couches.setContent(couchesTable);
         ui_couches.setClosable(false);
@@ -307,15 +307,15 @@ public class FXSeuilLitPane  extends AbstractFXElementPane<SeuilLit> {
         ui_linearId_link.disableProperty().bind(ui_linearId.getSelectionModel().selectedItemProperty().isNull());
         ui_linearId_link.setGraphic(new ImageView(SIRS.ICON_LINK));
         ui_linearId_link.setOnAction((ActionEvent e)->Injector.getSession().showEditionTab(ui_linearId.getSelectionModel().getSelectedItem()));
-        photosTable = new PojoTable(Photo.class, null);
+        photosTable = new PojoTable(Photo.class, null, elementProperty());
         photosTable.editableProperty().bind(disableFieldsProperty().not());
         ui_photos.setContent(photosTable);
         ui_photos.setClosable(false);
-        proprietesTable = new PojoTable(ProprieteObjet.class, null);
+        proprietesTable = new PojoTable(ProprieteObjet.class, null, elementProperty());
         proprietesTable.editableProperty().bind(disableFieldsProperty().not());
         ui_proprietes.setContent(proprietesTable);
         ui_proprietes.setClosable(false);
-        gestionsTable = new PojoTable(GestionObjet.class, null);
+        gestionsTable = new PojoTable(GestionObjet.class, null, elementProperty());
         gestionsTable.editableProperty().bind(disableFieldsProperty().not());
         ui_gestions.setContent(gestionsTable);
         ui_gestions.setClosable(false);
@@ -328,7 +328,7 @@ public class FXSeuilLitPane  extends AbstractFXElementPane<SeuilLit> {
         }
 
         if(bergeClass!=null){
-            bergeIdsTable = new ListeningPojoTable(bergeClass, null);
+            bergeIdsTable = new ListeningPojoTable(bergeClass, null, elementProperty());
             bergeIdsTable.editableProperty().bind(disableFieldsProperty().not());
             bergeIdsTable.createNewProperty().set(false);
             ui_bergeIds.setContent(bergeIdsTable);
@@ -459,9 +459,15 @@ public class FXSeuilLitPane  extends AbstractFXElementPane<SeuilLit> {
         couchesTable.setTableItems(()-> (ObservableList) newElement.getCouches());
         // * commentaire
         ui_commentaire.textProperty().bindBidirectional(newElement.commentaireProperty());
+        
+        final Preview linearPreview = newElement.getLinearId() == null ? null : previewRepository.get(newElement.getLinearId());
         SIRS.initCombo(ui_linearId, SIRS.observableList(
-            previewRepository.getByClass(TronconDigue.class)).sorted(),
-            newElement.getLinearId() == null? null : previewRepository.get(newElement.getLinearId()));
+            previewRepository.getByClass(linearPreview == null ? TronconDigue.class : linearPreview.getJavaClassOr(TronconDigue.class))).sorted(),
+            linearPreview);
+//        SIRS.initCombo(ui_linearId, SIRS.observableList(
+//            previewRepository.getByClass(TronconDigue.class)).sorted(),
+//            newElement.getLinearId() == null? null : previewRepository.get(newElement.getLinearId()));
+        
         // Propriétés de ObjetPhotographiable
         photosTable.setParentElement(newElement);
         photosTable.setTableItems(()-> (ObservableList) newElement.getPhotos());

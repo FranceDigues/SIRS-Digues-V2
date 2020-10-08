@@ -10,8 +10,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import fr.sirs.core.authentication.PasswordDeserializer;
 import fr.sirs.core.authentication.PasswordSerializer;
+import fr.sirs.core.authentication.SafePasswordDeserializer;
 import fr.sirs.util.property.Internal;
 import java.util.HashMap;
 import java.util.List;
@@ -334,7 +334,7 @@ public class BookMark
         this.identifiant.set(identifiant);
     }
 
-    @JsonDeserialize(using=PasswordDeserializer.class)
+    @JsonDeserialize(using=SafePasswordDeserializer.class)
     public String getMotDePasse(){
         return this.motDePasse.get();
     }

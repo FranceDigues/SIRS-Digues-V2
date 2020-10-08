@@ -49,7 +49,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +57,7 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -371,8 +371,8 @@ public class ODTUtils {
                     n.setTextContent(" - ");
                 }
             } else for (final Node n : entry.getValue()) {
-                    n.setTextContent(Printers.getPrinter(entry.getKey()).print(candidate, entry.getKey()));
-                }
+                n.setTextContent(Printers.getPrinter(entry.getKey()).print(candidate, entry.getKey()));
+            }
         }
     }
 
@@ -1253,12 +1253,16 @@ public class ODTUtils {
      * @param propertyNames List of properties (as returned by {@link PropertyDescriptor#getName()
      * } to use for table columns. If null or empty, all properties of input
      * objects will be used.
+     * @param printMapping
      * @throws java.beans.IntrospectionException If an error occurs while
      * analyzing properties of an element.
      * @throws java.lang.ReflectiveOperationException If an error occurs while
      * accessing an element property.
      */
-    public static void appendTable(final TableContainer target, final Iterator<Element> data, final List<String> propertyNames) throws IntrospectionException, ReflectiveOperationException {
+    public static void appendTable(final TableContainer target, final Iterator<Element> data, final List<String> propertyNames, 
+            final Map<String, Function<Element, String>> printMapping) 
+            throws IntrospectionException, ReflectiveOperationException {
+        
         ArgumentChecks.ensureNonNull("Target document", target);
         if (data == null || !data.hasNext()) {
             return; // No elements, do not create table
@@ -1266,18 +1270,15 @@ public class ODTUtils {
 
         Element element = data.next();
         Class<? extends Element> elementClass = element.getClass();
-        LinkedHashMap<String, PropertyDescriptor> elementProperties = SirsCore.listSimpleProperties(elementClass);
-        final HashMap<String, LinkedHashMap<String, PropertyDescriptor>> descriptorsByClass = new HashMap<>();
+        Map<String, PropertyDescriptor> elementProperties = SirsCore.listSimpleProperties(elementClass);
+        final Map<String, Map<String, PropertyDescriptor>> descriptorsByClass = new HashMap<>();
         descriptorsByClass.put(elementClass.getCanonicalName(), elementProperties);
 
         final List<String> headers;
-        final Set<String> pKeys = elementProperties.keySet();
         if (propertyNames == null) {
-            headers = new ArrayList<>(pKeys);
+            headers = new ArrayList<>(elementProperties.keySet());
         } else {
             headers = propertyNames;
-            headers.retainAll(pKeys);
-            pKeys.retainAll(headers);
         }
 
         // Create table and headers
@@ -1288,12 +1289,13 @@ public class ODTUtils {
         } else {
             headerStyle = null;
         }
-        LabelMapper lMapper = LabelMapper.get(elementClass);
-        Row dataRow = table.getRowByIndex(0);
+        
+        final LabelMapper lMapper_0 = LabelMapper.get(elementClass);
+        final Row dataRow_0 = table.getRowByIndex(0);
         Cell currentCell;
         for (int i = 0; i < headers.size(); i++) {
-            currentCell = dataRow.getCellByIndex(i);
-            currentCell.addParagraph(lMapper.mapPropertyName(headers.get(i)))
+            currentCell = dataRow_0.getCellByIndex(i);
+            currentCell.addParagraph(lMapper_0.mapPropertyName(headers.get(i)))
                     .getFont().setFontStyle(StyleTypeDefinitions.FontStyle.BOLD);
             if (headerStyle != null) {
                 currentCell.setCellStyleName(headerStyle.getStyleNameAttribute());
@@ -1301,19 +1303,27 @@ public class ODTUtils {
         }
 
         // Fill first line
-        dataRow = table.appendRow();
-        String propertyName;
+        final Row dataRow_1 = table.appendRow();
         for (int i = 0; i < headers.size(); i++) {
-            propertyName = headers.get(i);
-            dataRow.getCellByIndex(i).addParagraph(
-                    Printers.getPrinter(propertyName).print(element, elementProperties.get(propertyName)));
+            final String propertyName = headers.get(i);
+            final PropertyDescriptor desc = elementProperties.get(propertyName);
+            final PropertyPrinter printer = Printers.getPrinter(propertyName);
+            if (desc != null) {
+                dataRow_1.getCellByIndex(i).addParagraph(printer.print(element, desc));
+            }
+            else if(printMapping.get(propertyName)!=null){
+                dataRow_1.getCellByIndex(i).addParagraph(printer.print(element, propertyName, printMapping.get(propertyName)));
+            }
+            else {
+                SirsCore.LOGGER.log(Level.INFO, "Cannot hangle {0} column (first line)", propertyName);
+            }
         }
 
         // Fill remaining lines
         while (data.hasNext()) {
             element = data.next();
             elementClass = element.getClass();
-            lMapper = LabelMapper.get(elementClass);
+            final LabelMapper lMapper = LabelMapper.get(elementClass);
             /*
              * If current object is a new type of element, we retrieve its properties
              * and add necessary columns in case none have been specified as input.
@@ -1332,20 +1342,23 @@ public class ODTUtils {
                                     .getFont().setFontStyle(StyleTypeDefinitions.FontStyle.BOLD);
                         }
                     }
-                } else {
-                    elementProperties.keySet().retainAll(headers);
                 }
             }
 
             // Fill data
-            dataRow = table.appendRow();
-            PropertyDescriptor desc;
+            final Row dataRow = table.appendRow();
             for (int i = 0; i < headers.size(); i++) {
-                propertyName = headers.get(i);
-                desc = elementProperties.get(propertyName);
+                final String propertyName = headers.get(i);
+                final PropertyDescriptor desc = elementProperties.get(propertyName);
+                final PropertyPrinter printer = Printers.getPrinter(propertyName);
                 if (desc != null) {
-                    dataRow.getCellByIndex(i).addParagraph(
-                            Printers.getPrinter(propertyName).print(element, elementProperties.get(propertyName)));
+                    dataRow.getCellByIndex(i).addParagraph(printer.print(element, desc));
+                }
+                else if(printMapping.get(propertyName)!=null){
+                    dataRow.getCellByIndex(i).addParagraph(printer.print(element, propertyName, printMapping.get(propertyName)));
+                }
+                else {
+                    SirsCore.LOGGER.log(Level.INFO, "Cannot handle {0} column", propertyName);
                 }
             }
         }
@@ -1371,9 +1384,8 @@ public class ODTUtils {
             headerStyle = null;
         }
         Row dataRow = table.getRowByIndex(0);
-        Cell currentCell;
         for (int i = 0; i < propertyNames.size(); i++) {
-            currentCell = dataRow.getCellByIndex(i);
+            final Cell currentCell = dataRow.getCellByIndex(i);
             currentCell.setStringValue(propertyNames.get(i));
             if (headerStyle != null) {
                 currentCell.setCellStyleName(headerStyle.getStyleNameAttribute());
@@ -1385,8 +1397,7 @@ public class ODTUtils {
         String propertyName;
         for (int i = 0; i < propertyNames.size(); i++) {
             propertyName = propertyNames.get(i);
-            dataRow.getCellByIndex(i).setStringValue(
-                    Printers.getPrinter(propertyName).print(next, propertyName));
+            dataRow.getCellByIndex(i).setStringValue(Printers.getPrinter(propertyName).print(next, propertyName));
         }
 
         // remaining lines
@@ -1395,8 +1406,7 @@ public class ODTUtils {
             dataRow = table.appendRow();
             for (int i = 0; i < propertyNames.size(); i++) {
                 propertyName = propertyNames.get(i);
-                dataRow.getCellByIndex(i).setStringValue(
-                        Printers.getPrinter(propertyName).print(next, propertyName));
+                dataRow.getCellByIndex(i).setStringValue(Printers.getPrinter(propertyName).print(next, propertyName));
             }
         }
     }
@@ -1414,45 +1424,94 @@ public class ODTUtils {
         return style;
     }
 
-    public static Task generateReport(final ModeleRapport report, final Collection<? extends Element> elements, final Path output, String title) {
+    /**
+     * Génération d'un rapport.
+     * 
+     * @param reportModel modèle de rapport contenant la description des différentes sections à inclure
+     * @param elements éléments candidats à l'inclusion dans le rapport
+     * @param output
+     * @param title titre du rapport, si le titre est null ou vide, c'est le titre du modèle de rapport qui sera utilisé
+     * @return 
+     */
+    public static Task generateReport(final ModeleRapport reportModel, final Collection<? extends Element> elements, final Path output, String title) {
+        
+        /*
+        A- détermination d'un titre
+        ===========================*/
+        
         final String titre;
         if (title == null || title.isEmpty()) {
-            titre = report.getLibelle();
+            titre = reportModel.getLibelle();
         } else {
             titre = title;
         }
 
+        
+        /*
+        B- construction et lancement de la tâche de génération
+        =====================================================*/
+        
         return TaskManager.INSTANCE.submit(new Task() {
             @Override
             protected Object call() throws Exception {
+                
+                
                 updateTitle("Génération de rapport" + (titre != null ? " (" + titre + ")" : ""));
-                final ObservableList<AbstractSectionRapport> sections = report.getSections();
+                
+                
+                /*
+                1- récupération des différentes sections du rapport
+                --------------------------------------------------*/
+                
+                final ObservableList<AbstractSectionRapport> sections = reportModel.getSections();
+                
+                
+                /*
+                2- initialisation des paramètres de suivi de la progression de la tâche
+                -----------------------------------------------------------------------*/
                 final long totalWork = elements == null? -1 : elements.size() * sections.size();
                 final AtomicLong currentWork = new AtomicLong(-1);
 
+                
+                /*
+                3- création et remplissage du document section par section
+                ---------------------------------------------------------*/
+                
                 // on crée le document de rapport
                 try (final TextDocument headerDoc = TextDocument.newTextDocument()) {
+                    
+                    // a- titre du rapport
                     if (titre != null && !titre.isEmpty()) {
                         final Paragraph paragraph = headerDoc.addParagraph(titre);
                         paragraph.applyHeading();
                     }
 
+                    // b- parcours des sections pour impression au fur et à mesure
                     // on aggrege chaque section
                     AbstractSectionRapport section;
                     long expectedWork;
                     for (int i = 0; i < sections.size(); i++) {
+                        
+                        // récupération de la i-ème section
                         section = sections.get(i);
+                        
+                        // mise à jour du message d'information indiquant l'impression de la section en cours
                         String libelle = section.getLibelle();
                         if (libelle == null || libelle.isEmpty()) {
                             libelle = "sans nom";
                         }
                         updateMessage("Génération de la section : " + libelle);
 
+                        // impression des éléments par la section : l'impression est gérée au cas par cas par le type de section
                         if (elements == null || elements.isEmpty()) {
+                            // cas particulier : on force à null si aucun élément n'est fourni
                             section.print(headerDoc, null);
                         } else {
                             try (final Stream dataStream = elements.stream().peek(input -> updateProgress(currentWork.incrementAndGet(), totalWork))) {
+                                
+                                // délégaton de l'impression au type de section
                                 section.print(headerDoc, dataStream);
+                                
                                 // In case section printing has not used provided stream, we have to update progress manually.
                                 expectedWork = ((long)i + 1) * elements.size() - 1;
                                 if (currentWork.get() != expectedWork) {

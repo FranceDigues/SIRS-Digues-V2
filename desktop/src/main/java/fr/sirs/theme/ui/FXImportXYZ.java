@@ -76,7 +76,7 @@ public class FXImportXYZ extends FXAbstractImportPointLeve<PointXYZ> {
     @FXML private ComboBox<PropertyType> uiAttX;
     @FXML private ComboBox<PropertyType> uiAttY;
 
-    FXImportXYZ(final PojoTable pojoTable) {
+    public FXImportXYZ(final PojoTable pojoTable) {
         super(pojoTable);
 
         uiAttX.setConverter(stringConverter);
@@ -114,9 +114,8 @@ public class FXImportXYZ extends FXAbstractImportPointLeve<PointXYZ> {
             uiTable.init(layer);
 
             //liste des propriétés
-            final ObservableList<PropertyType> properties = FXCollections
-                    .observableArrayList(col.getFeatureType().getProperties(true))
-                    .sorted((o1, o2) -> o1.getName().compareTo(o2.getName()));
+            final ObservableList<PropertyType> properties = getPropertiesFromFeatures(col);
+
             uiAttDesignation.setItems(properties);
             uiAttX.setItems(properties);
             uiAttY.setItems(properties);
@@ -221,7 +220,7 @@ public class FXImportXYZ extends FXAbstractImportPointLeve<PointXYZ> {
             leve.setDesignation(String.valueOf(feature.getPropertyValue(uiAttDesignation.getValue().getName().tip().toString())));
 
             leve.setAuthor(sirsSession.getUtilisateur() == null? null : sirsSession.getUtilisateur().getId());
-            leve.setValid(!sirsSession.needValidationProperty().get());
+            leve.setValid(sirsSession.createValidDocuments().get());
             leves.add(leve);
         }
         return leves;

@@ -23,6 +23,7 @@ import fr.sirs.SIRS;
 import fr.sirs.Session;
 import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.model.Preview;
+import fr.sirs.core.model.SQLQueries;
 import fr.sirs.core.model.SQLQuery;
 import fr.sirs.core.model.report.FicheSectionRapport;
 import fr.sirs.core.model.report.ModeleElement;
@@ -219,7 +220,7 @@ public class FXFicheSectionRapportPane extends AbstractFXElementPane<FicheSectio
      */
     @FXML
     private void chooseQuery(final ActionEvent e) {
-        final Optional<SQLQuery> query = FXSearchPane.chooseSQLQuery(Injector.getSession().getRepositoryForClass(SQLQuery.class).getAll());
+        final Optional<SQLQuery> query = FXSearchPane.chooseSQLQuery(SQLQueries.dbQueries());
         if (query.isPresent())
             queryProperty.set(query.get());
     }

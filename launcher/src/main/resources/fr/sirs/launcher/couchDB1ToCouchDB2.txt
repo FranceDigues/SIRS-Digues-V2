@@ -1,0 +1,157 @@
+                    QUELQUES INDICATIONS
+                            
+1- CouchDB 2 dispose de l'outil de migration de données de CouchDB 1
+vers CouchDB 2 "couchup", mais cet utilitaire nécessite de pouvoir 
+exécuter un script Python (voir spécification technique :
+http://docs.couchdb.org/en/2.1.1/install/upgrading.html ). Il est 
+préférable pour les utilisateurs non familiers avec l'exécution de
+scripts, de réaliser la migration de données manuellement.
+
+2- AVANT l'installation de CouchDB2, il est conseillé DANS TOUS 
+LES CAS de sauvegarder les fichiers de données des bases CouchDB 1 
+dans un répertoire dédié non susceptible d'être altéré par 
+l'installation de CouchDB 2 ou tout autre écriture d'information 
+sur le disque.
+
+3- La présente note est destinée à avertir les utilisateurs du SIRS du 
+changement de système de gestion des données. Les indications qu'elle 
+contient ne se substituent pas à la documentation officielle de CouchDB 
+concernant le passage de CouchDB 1 à CouchDB 2 : 
+http://docs.couchdb.org/en/2.1.1/install/upgrading.html .
+
+4- Chaque base CouchDB 1 dispose de son fichier de données qui porte 
+son nom avec l'extension ".couch" (par exemple, le fichier de la base 
+"ad_isere" porte le nom "ad_isere.couch".
+
+5- De manière générale, le répertoire dans lequel se trouvent les
+fichiers de données dépend de la configuration de CouchDB 1 et du 
+système d'exploitation hôte de chaque utilisateur. À titre informatif, 
+voici quelques chemins probables :
+- Sous Windows : "<repertoire_intallation_couchdb>\var\lib\couchdb"
+- Sous Ubuntu 16.04 : "/var/lib/couchdb"
+Normalement, les données sont conservées dans ces répertoires lors de
+la désinstallation de CouchDB1 et lors de l'installation de CouchDB 2,
+mais il relève de la diligence de chaque utilisateur de prendre les
+précautions de sauvegarde nécessaires à la préservation de ses données.
+
+6- Selon le système d'exploitation utilisé, l'installation de CouchDB 2
+se déroule de manière différente.
+
+6a- Si la procédure d'installation laisse le choix du répertoire
+d'installation (installation sous Windows), il est recommandé de NE 
+PAS choisir le même répertoire que celui dans lequel CouchDB 1 
+est déjà installé.
+
+6b- Si la procédure d'installation laisse le choix de réaliser une
+configuration de CouchDB 2 (installation sous Ubuntu 16.04) "cluster" ou
+"standalone", il est recommandé NE PAS configurer CouchDB 2 lors de 
+l'installation afin de préserver la configuration par défaut.
+
+6c- Pour les utilisateurs familiers avec Docker, il est également 
+possible d'utiliser CouchDB 1 ou CouchDB 2 via un conteneur Docker : 
+https://hub.docker.com/_/couchdb/
+
+6d- CouchDB 1 et CouchDB 2 peuvent fonctionner simultanément, pourvu
+que leurs URLs respectives (adresse et numéro de port) ne prêtent pas
+à confusion. Pour éviter toute ambiguïté, on peut par exemple modifier
+le numéro de port de CouchDB 1 dans sa configuration, puis redémarrer 
+le serveur. L'emplacement le plus probable des fichiers de configuration
+de CouchDB 1 se trouve a priori :
+- Sous Windows : "<repertoire_intallation_couchdb>\etc\couchdb"
+- Sous Ubuntu 16.04 : "/etc/couchdb"
+Il est néanmoins déconseillé de chercher à faire fonctionner le SIRS
+avec une version de CouchDB non compatible.
+
+7- Une fois les fichiers relatifs aux bases de données CouchDB 1 copiés 
+en lieu sûr, l'installation de CouchDB 2 peut commencer. À moins que 
+CouchDB 1 soit accessible sur un port différent des ports utilisés par
+CouchDB 2, il est recommandé d'arrêter ou de désinstaller CouchDB 1.
+
+7a- Pour les utilisateurs souhaitant désinstaller CouchDB 1 :
+- Sous Windows, un programme de désinstallation de CouchDB 1 est
+situé dans son répertoire d'installation : uninstall.exe ;
+- Sous Ubuntu, on procède en général à la désinstallation du paquet 
+couchdb de manière classique.
+
+8- L'installation de CouchDB 2 doit être réalisée à partir des resources
+officielles de CouchDB tant en ce qui concerne le logiciel que la
+documentation d'installation relatifs au système d'exploitation de
+chaque utilisateur : http://couchdb.apache.org/ .
+
+9- AVANT de créer ou de récupérer des données sur le nouveau système
+CouchDB 2 en local, il est recommandé de créer un compte administrateur 
+doté des mêmes identifiants que l'administrateur de l'ancien système 
+CouchDB 1 local afin de ne pas casser les configurations du SIRS.
+
+10- AVANT de créer ou de récupérer des données sur le nouveau système
+CouchDB 2 en local, il est recommandé de configurer les paramètres "q"
+et "n" de clustering. Dans le cadre de la configuration d'un serveur
+local, si l'on souhaite réduire l'impact de CouchDB 2 sur les ressources
+matérielles, ces deux paramètres peuvent prendre la valeur 1. Le
+paramètre "n" en particulier concerne le nombre de réplication des 
+données : une valeur différente de 1 pour un serveur local augmenterait
+l'espace disque occupé en proportion sans justification. Pour plus de
+détails, on se reportera à la documentation officielle de CouchDB
+(http://docs.couchdb.org/en/latest/config/cluster.html ).  
+
+11- Pour une réintégration des données de CouchDB1 dans CouchDB2 par 
+réplication de bases de données, se reporter au point 12.
+Pour une réintégration des données de CouchDB1 dans CouchDB2 par 
+copie des fichiers de bases de données, se reporter au point 13.
+
+12- La réintégration des données de CouchDB 1 dans CouchDB 2 peut être 
+réalisée par réplication de plusieurs manières :
+- si les données peuvent être récupérées d'une base CouchDB 1 (soit 
+locale, soit en ligne) : il est normalement possible de répliquer une
+base de données via les interfaces web administrateur d'un CouchDB en 
+local. Il est néanmoins conseillé dans ce cas de ne pas synchroniser la
+réplication. Il s'agit du cas où l'on a conservé un système CouchDB 1 
+en local ou bien du cas où l'on préfère initialiser une nouvelle base
+de données CouchDB 2 à partir d'un système CouchDB 1 en ligne.
+- si les données peuvent être récupérées d'une base CouchDB 2 (en ligne)
+il est normalement possible de répliquer une base de données via les
+interfaces web administrateur du système CouchDB 2 en local. Il s'agit
+du cas où l'on préfère initialiser une nouvelle base de données CouchDB 2
+à partir d'un système CouchDB 2 déjà accessible en ligne.
+
+13- La réintégration des données de CouchDB 1 dans CouchDB 2 peut être 
+réalisée par copie des fichiers de bases de données.
+Si les données doivent être récupérées à partir des fichiers 
+sauvegardés, se reporter aux indications de la documentation officielle
+(http://docs.couchdb.org/en/2.1.1/install/upgrading.html ) pour une
+migration manuelle. Les principale étapes peuvent être commentées comme
+suit :
+
+13a- Le nouveau système CouchDB 2 local doit être arrêté avant la 
+manipulation.
+
+13b- Puis on copie les fichiers des bases CouchDB 1 préalablement 
+sauvegardés, dans le répertoire des données de CouchDB 2. Ce répertoire
+se trouve habituellement :
+- sous Windows : "<repertoire_intallation_couchdb>\data"
+- sous Ubuntu 16.04 "/opt/couchdb/data" qui peut n'être qu'un lien vers 
+l'ancien répertoire des données de CouchDB 1 "/var/lib/couchdb".
+
+13c- Suivant le système d'exploitation et la manière dont les fichiers 
+des bases CouchDB 1 auront été préalablement sauvegardés, il est 
+possible que l'utilisateur et le groupe des fichiers soient modifiés
+pour pouvoir être reconnus par CouchDB 2. Ces manipulations ne sont 
+normalement pas nécessaires sous Windows.
+
+13d- Une fois les fichiers copiés et le système CouchDB 2 redémarré,
+on peut se connecter à l'interface administrateur sur le port
+exposant les bases non clusterisées (par défaut le port 5986)
+
+13e- Il est alors recommandé de réaliser une réplication non synchronisée
+en fournissant tous les paramètres d'utilisateur, mot de passse, hôte, 
+port et nom de base comme s'il s'agissait de bases distantes. Pour
+rappel, le patron général est le suivant :
+"http://<login_utilisateur>:<mot_de_passe>@<hote>:<port>/<nom_de_base>"
+
+14- Quelle que soit la méthode de réintégration de données de CouchDB 1
+(réplication de bases de données ou copie de fichiers), il est recommandé 
+lors des opérations de réplication de créer préalablement la base cible 
+comme une base vide et de réaliser ainsi une réplication vers une base 
+distante existante plutôt qu'une réplication vers une nouvelle base. 
+Il est également préférable que la base cible porte le même nom que la 
+base source.

@@ -25,6 +25,7 @@ import fr.sirs.core.TronconUtils;
 import fr.sirs.core.TronconUtils.ArchiveMode;
 import fr.sirs.core.component.Previews;
 import fr.sirs.core.component.SystemeReperageRepository;
+import fr.sirs.core.model.AvecBornesTemporelles;
 import fr.sirs.core.model.Digue;
 import fr.sirs.core.model.Element;
 import fr.sirs.core.model.GardeTroncon;
@@ -38,6 +39,7 @@ import fr.sirs.core.model.TronconDigue;
 import fr.sirs.digue.FXSystemeReperagePane;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Predicate;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ChangeListener;
@@ -89,11 +91,11 @@ public class FXTronconDiguePane extends AbstractFXElementPane<TronconDigue> {
 
     // Onglet "Contacts"
     @FXML private Tab uiGestionsTab;
-    private final GestionsTable uiGestionsTable = new GestionsTable();
+    private final GestionsTable uiGestionsTable;
     @FXML private Tab uiProprietesTab;
-    private final ForeignParentPojoTable<ProprieteTroncon> uiProprietesTable = new ForeignParentPojoTable<>(ProprieteTroncon.class, "Période de propriété");
+    private final ForeignParentPojoTable<ProprieteTroncon> uiProprietesTable;
     @FXML private Tab uiGardesTab;
-    private final ForeignParentPojoTable<GardeTroncon> uiGardesTable = new ForeignParentPojoTable<>(GardeTroncon.class, "Période de gardiennage");
+    private final ForeignParentPojoTable<GardeTroncon> uiGardesTable;
 
     // Booleen déterminant s'il est nécessaire de calculer l'état d'archivage du tronçon et des objets qui s'y réfèrent lors de l'enregistrement.
     protected LocalDate initialArchiveDate;
@@ -172,8 +174,11 @@ public class FXTronconDiguePane extends AbstractFXElementPane<TronconDigue> {
         uiSRDelete.disableProperty().set(true);
         uiSRDelete.setVisible(false);
 
+        uiGestionsTable = new GestionsTable(elementProperty());
         uiGestionsTable.editableProperty().bind(disableFieldsProperty().not());
+        uiProprietesTable = new ForeignParentPojoTable<>(ProprieteTroncon.class, "Période de propriété", elementProperty());
         uiProprietesTable.editableProperty().bind(disableFieldsProperty().not());
+        uiGardesTable = new ForeignParentPojoTable<>(GardeTroncon.class, "Période de gardiennage", elementProperty());
         uiGardesTable.editableProperty().bind(disableFieldsProperty().not());
 
         // Troncon change listener
@@ -361,13 +366,19 @@ public class FXTronconDiguePane extends AbstractFXElementPane<TronconDigue> {
         // Si on a détecté que la date d'archivage du tronçon a changé d'une manière ou d'une autre.
         switch(computeArchive){
             case UNARCHIVE:
-                TronconUtils.unarchiveSectionWithTemporalObjects(element, session, initialArchiveDate);
+                final Predicate<AvecBornesTemporelles> unArchiveIf = new AvecBornesTemporelles.UnArchivePredicate(initialArchiveDate);
+                TronconUtils.archiveSectionWithTemporalObjects(element, session, null, unArchiveIf);
+                TronconUtils.archiveBornes(element.getBorneIds(), session, null, unArchiveIf);
                 break;
             case ARCHIVE:
-                TronconUtils.archiveSectionWithTemporalObjects(element, session, element.getDate_fin(), false);
+                final Predicate<AvecBornesTemporelles> archiveIf = new AvecBornesTemporelles.ArchivePredicate(null);
+                TronconUtils.archiveSectionWithTemporalObjects(element, session, element.getDate_fin(), archiveIf);
+                TronconUtils.archiveBornes(element.getBorneIds(), session, element.getDate_fin(), archiveIf);
                 break;
             case UPDATE_ARCHIVE:
-                TronconUtils.updateArchiveSectionWithTemporalObjects(element, session, initialArchiveDate, element.getDate_fin());
+                final Predicate<AvecBornesTemporelles> updateIf = new AvecBornesTemporelles.UpdateArchivePredicate(initialArchiveDate);
+                TronconUtils.archiveSectionWithTemporalObjects(element, session, element.getDate_fin(), updateIf);
+                TronconUtils.archiveBornes(element.getBorneIds(), session, element.getDate_fin(), updateIf);
         }
         // Réinitialisation du processus d'archivage.
         computeArchive = ArchiveMode.UNCHANGED;
@@ -376,8 +387,8 @@ public class FXTronconDiguePane extends AbstractFXElementPane<TronconDigue> {
 
     private final class GestionsTable extends PojoTable {
 
-        public GestionsTable() {
-            super(GestionTroncon.class, "Périodes de gestion");
+        public GestionsTable(ObjectProperty<? extends Element> container) {
+            super(GestionTroncon.class, "Périodes de gestion", container);
         }
 
         @Override

@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -27,7 +27,6 @@ import org.ektorp.ViewResult.Row;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.sirs.util.ClosingDaemon;
-import javafx.beans.property.SimpleObjectProperty;
 
 
 public class SirsViewIterator<T> implements Iterator<T>, AutoCloseable {
@@ -78,7 +77,7 @@ public class SirsViewIterator<T> implements Iterator<T>, AutoCloseable {
 
     public static <T> SirsViewIterator<T> create(Class<T> resultType, StreamingViewResult queryForStreamingView) {
         SirsViewIterator<T> iterator = new SirsViewIterator<>(resultType, queryForStreamingView);
-        ClosingDaemon.watchResource(iterator, new SimpleObjectProperty<>(iterator.result));
+        ClosingDaemon.watchResource(iterator, iterator.result);
         return iterator;
     }
 }

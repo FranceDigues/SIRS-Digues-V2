@@ -153,8 +153,7 @@ public class FXBookMarkPane extends AbstractFXElementPane<BookMark> {
         ui_table.setPlaceholder(new Label(""));
         FXUtilities.hideTableHeader(ui_table);
 
-        refreshDisabled = disableFieldsProperty()
-                .or(ui_service.valueProperty().isNull())
+        refreshDisabled = ui_service.valueProperty().isNull()
                 .or(ui_parametres.textProperty().isEmpty())
                 .or(ui_progress.visibleProperty());
 
@@ -219,7 +218,7 @@ public class FXBookMarkPane extends AbstractFXElementPane<BookMark> {
     @FXML
     void refreshList(ActionEvent event) {
         final BookMark bookmark = getElement();
-        Task<List<MapLayer>> loader = new TaskManager.MockTask<>(() -> PluginCarto.listLayers(bookmark));
+        Task<List<MapLayer>> loader = new TaskManager.MockTask<>("Chargement des couches WMS", () -> PluginCarto.listLayers(bookmark));
         ui_progress.visibleProperty().bind(loader.runningProperty());
 
         loader.setOnFailed(evt -> Platform.runLater(() -> {

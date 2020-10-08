@@ -19,6 +19,7 @@
 package fr.sirs.util;
 
 import fr.sirs.Injector;
+import fr.sirs.SIRS;
 import static fr.sirs.core.SirsCore.DIGUE_ID_FIELD;
 import fr.sirs.core.component.Previews;
 import fr.sirs.core.model.Desordre;
@@ -44,6 +45,7 @@ import static fr.sirs.util.JRDomWriterDesordreSheet.RESEAU_OUVRAGE_TABLE_DATA_SO
 import static fr.sirs.util.JRDomWriterDesordreSheet.VOIRIE_TABLE_DATA_SOURCE;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 import javafx.collections.ObservableList;
 import net.sf.jasperreports.engine.JRException;
 import net.sf.jasperreports.engine.JRField;
@@ -74,9 +76,14 @@ public class DesordreDataSource extends ObjectDataSource<Desordre> {
 
         if(DIGUE_ID_FIELD.equals(name)){
             if(currentObject!=null&&currentObject.getLinearId()!=null){
-                final TronconDigue troncon = Injector.getSession().getRepositoryForClass(TronconDigue.class).get(currentObject.getLinearId());
-                if(troncon!=null&&troncon.getDigueId()!=null){
-                    return parsePropertyValue(troncon.getDigueId(), Digue.class, String.class);
+                try{
+                    final TronconDigue troncon = Injector.getSession().getRepositoryForClass(TronconDigue.class).get(currentObject.getLinearId());
+                    if(troncon!=null&&troncon.getDigueId()!=null){
+                        return parsePropertyValue(troncon.getDigueId(), Digue.class, String.class);
+                    }
+                } catch (IllegalArgumentException e){
+                    // SYM-1735 : problème d'impression des fiches de désordres attachés à des berges lorsque le module berges n'est pas chargé
+                    SIRS.LOGGER.log(Level.INFO, "un problème a été rencontré lors de l'extraction de la digue d'une fiche", e);
                 }
             }
             return null;

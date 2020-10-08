@@ -19,17 +19,18 @@
 package fr.sirs.theme.ui;
 
 import fr.sirs.SIRS;
+import fr.sirs.core.model.AbstractObservation;
 import fr.sirs.core.model.AbstractPhoto;
 import fr.sirs.core.model.AvecCommentaire;
+import fr.sirs.core.model.AvecObservations;
 import fr.sirs.core.model.AvecPhotos;
-import fr.sirs.core.model.Desordre;
 import fr.sirs.core.model.Element;
-import fr.sirs.core.model.Observation;
 
 import java.lang.reflect.Method;
 import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.logging.Level;
 
@@ -114,28 +115,27 @@ public class FXCommentPhotoView extends SplitPane {
         }
 
         final ArrayList<AbstractPhoto> tmpPhotos = new ArrayList<>();
+        boolean filledPhoto = false;
+
         if (newValue instanceof AvecPhotos) {
             final AvecPhotos photoContainer = (AvecPhotos) newValue;
             uiPhotoScroll.setVisible(true);
             if (photoContainer.getPhotos() != null && !photoContainer.getPhotos().isEmpty()) {
                 tmpPhotos.addAll(photoContainer.getPhotos());
+                filledPhoto = true;
             }
         } else if (newValue instanceof AbstractPhoto) {
             tmpPhotos.add((AbstractPhoto) newValue);
-        } else if (newValue instanceof Desordre) {
-            final Desordre tmpDisorder = (Desordre) newValue;
-            Observation target = null;
-            if (tmpDisorder.observations != null && !tmpDisorder.observations.isEmpty()) {
-                target = tmpDisorder.observations.get(0);
-                Observation current;
-                LocalDate date;
-                for (int i = 1 ; i < tmpDisorder.observations.size() ; i++) {
-                    current = tmpDisorder.observations.get(i);
-                    date = current.dateProperty().get();
-                    if (date != null && (target.dateProperty().get() == null || date.isAfter(target.dateProperty().get()))) {
-                        target = current;
-                    }
-                }
+            filledPhoto = true;
+        }
+
+        if ( (!filledPhoto) &&(newValue instanceof AvecObservations) ) {
+            final AvecObservations tmpObserved = (AvecObservations) newValue;
+            AbstractObservation target = null;
+            List<? extends AbstractObservation> assessedObservations = tmpObserved.getObservations();
+            if (assessedObservations != null && !assessedObservations.isEmpty()) {
+                assessedObservations.sort(observationComparator);
+                target = assessedObservations.get(0);
             }
 
             if (target != null && target.getPhotos() != null && !target.getPhotos().isEmpty()) {
@@ -144,17 +144,34 @@ public class FXCommentPhotoView extends SplitPane {
         }
 
         if (!tmpPhotos.isEmpty()) {
-            tmpPhotos.sort((o1, o2) -> {
-                if (o1 == null || o1.getDate() == null)
-                    return 1;
-                else if (o2 == null || o2.getDate() == null)
-                    return -1;
-                else return o1.getDate().compareTo(o2.getDate());
-            });
+            tmpPhotos.sort(photoComparator);
         }
 
         photos.set(tmpPhotos);
     }
+
+    private final Comparator<AbstractPhoto> photoComparator = (o1, o2) -> {
+                if (o1 == null || o1.getDate() == null)
+                    return 1;
+                else if (o2 == null || o2.getDate() == null)
+                    return -1;
+                else return o2.getDate().compareTo(o1.getDate());  //Rappel : >0 si date de o2 > date de o1
+            };
+
+    private final Comparator<AbstractObservation> observationComparator = (o1, o2) -> {
+        final boolean o1WithPhoto = !(o1 == null || o1.getDate() == null || o1.photos == null || o1.photos.isEmpty());
+        final boolean o2WithPhoto = !(o2 == null || o2.getDate() == null || o2.photos == null || o2.photos.isEmpty());
+
+        if (!o1WithPhoto && !o2WithPhoto) {
+            return 0;
+        } else if (o1WithPhoto && !o2WithPhoto) {
+            return 2;
+        } else if (o2WithPhoto && !o1WithPhoto) {
+            return -2;
+        } else {
+            return o2.getDate().compareTo(o1.getDate());
+        }
+    };
 
     public ObjectProperty<Element> valueProperty() {
         return valueProperty;
@@ -171,7 +188,7 @@ public class FXCommentPhotoView extends SplitPane {
         if (newIndex == null)
             return;
 
-        final int index = newIndex.shortValue();
+        int index = newIndex.shortValue();
         if (index < 0)
             return;
 
@@ -180,8 +197,15 @@ public class FXCommentPhotoView extends SplitPane {
             return;
         }
 
-        final AbstractPhoto selected = tmpPhotos.get(index);
-        if (selected.getChemin() == null || selected.getChemin().isEmpty()) {
+        final AbstractPhoto selected;
+        AbstractPhoto assessed;
+        final int size = tmpPhotos.size();
+        assessed= tmpPhotos.get(index);
+        while ((assessed.getChemin() == null || assessed.getChemin().isEmpty()) && (index<size-1)) {
+            assessed= tmpPhotos.get(++index);
+        }
+        selected = assessed;
+        if (index == size) {
             uiPhotoLibelle.setText("Aucun fichier n'est associé à la photo.");
         } else {
             uiPhotoLibelle.setText("");
@@ -216,7 +240,7 @@ public class FXCommentPhotoView extends SplitPane {
                         } catch (IllegalStateException e) {
                             // Illegal state exception here means no root folder has been configured for photos,
                             // just use the given path for the photo.
-                            SIRS.LOGGER.log(Level.INFO, e.getLocalizedMessage());
+                            SIRS.LOGGER.log(Level.WARNING, e.getLocalizedMessage());
                             return SIRS.getOrLoadImage(Paths.get(selected.getChemin()).toUri().toURL().toExternalForm());
                         }
                     });

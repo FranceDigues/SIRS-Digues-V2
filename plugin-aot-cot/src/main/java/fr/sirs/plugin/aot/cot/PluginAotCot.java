@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -50,6 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
@@ -79,7 +80,7 @@ import org.opengis.util.GenericName;
 public class PluginAotCot extends Plugin {
     private static final String NAME = "plugin-aot-cot";
     private static final String TITLE = "Module AOT COT";
-    
+
     private final ConsultationAotCotTheme consultationAotCotTheme;
 
     public PluginAotCot() {
@@ -107,26 +108,26 @@ public class PluginAotCot extends Plugin {
         // TODO: choisir une image pour ce plugin
         return null;
     }
-    
+
     private final HashMap<Class, BeanFeatureSupplier> suppliers = new HashMap<>();
-    
+
     private synchronized void loadDataSuppliers() {
         suppliers.clear();
         suppliers.put(PositionConvention.class, new StructBeanSupplier(PositionConvention.class, () -> getSession().getRepositoryForClass(PositionConvention.class).getAll()));
     }
-    
+
     @Override
     public void afterImport() throws Exception {
         if (suppliers.isEmpty()) {
             loadDataSuppliers();
         }
-        
-        // getLayerDescription itère sur les éléments des FeatureCollections des 
+
+        // getLayerDescription itère sur les éléments des FeatureCollections des
         // couches, ce qui a pour effet de créer les vues.
         for(final MapItem item : getMapItems()) getLayerDescription(item);
     }
-    
-    
+
+
     @Override
     public List<MapItem> getMapItems() {
         final List<MapItem> items = new ArrayList<>();
@@ -137,13 +138,13 @@ public class PluginAotCot extends Plugin {
             documentsLayer.setName(TITLE);
             documentsLayer.items().addAll(buildLayers(documentsStore, createDefaultSelectionStyle(),false) );
             documentsLayer.setUserProperty(Session.FLAG_SIRSLAYER, Boolean.TRUE);
-            items.add(documentsLayer); 
+            items.add(documentsLayer);
         }catch(Exception ex){
             SIRS.LOGGER.log(Level.WARNING, ex.getMessage(), ex);
         }
         return items;
     }
-    
+
     private List<MapLayer> buildLayers(BeanStore store, MutableStyle selectionStyle, boolean visible) throws DataStoreException{
         final List<MapLayer> layers = new ArrayList<>();
         final org.geotoolkit.data.session.Session symSession = store.createSession(false);
@@ -157,8 +158,8 @@ public class PluginAotCot extends Plugin {
 
                 if(col.getFeatureType().getDescriptor(DATE_DEBUT_FIELD)!=null && col.getFeatureType().getDescriptor(DATE_FIN_FIELD)!=null){
                     final FeatureMapLayer.DimensionDef datefilter = new FeatureMapLayer.DimensionDef(
-                            CommonCRS.Temporal.JAVA.crs(), 
-                            GO2Utilities.FILTER_FACTORY.property(DATE_DEBUT_FIELD), 
+                            CommonCRS.Temporal.JAVA.crs(),
+                            GO2Utilities.FILTER_FACTORY.property(DATE_DEBUT_FIELD),
                             GO2Utilities.FILTER_FACTORY.property(DATE_FIN_FIELD)
                     );
                     fml.getExtraDimensions().add(datefilter);
@@ -180,13 +181,13 @@ public class PluginAotCot extends Plugin {
     @Override
     public List<MenuItem> getMapActions(final Object candidate) {
         final List<MenuItem> lst = new ArrayList<>();
-        
+
         if(candidate instanceof AotCotAssociable || candidate instanceof Objet || candidate instanceof PositionConvention) {
             lst.add(new ViewFormObjetItem((Element) candidate));
         }
         return lst;
     }
-    
+
     private class ViewFormObjetItem extends MenuItem {
 
         public ViewFormObjetItem(final Element candidate) {
@@ -199,7 +200,7 @@ public class PluginAotCot extends Plugin {
     }
 
     /**
-     * Crée un tableau des conventions liées à un objet (Objet, AotCotAssociable 
+     * Crée un tableau des conventions liées à un objet (Objet, AotCotAssociable
      * ou PositionConvention).
      *
      * @param candidate
@@ -209,19 +210,19 @@ public class PluginAotCot extends Plugin {
 
         final List<Convention> conventionsLiees = Injector.getSession().getRepositoryForClass(Convention.class).get(getConventionIdsForObjet(candidate));
 
-        final PojoTable table = new PojoTable(Convention.class, "Conventions de l'objet "+new SirsStringConverter().toString(candidate));
+        final PojoTable table = new PojoTable(Convention.class, "Conventions de l'objet "+new SirsStringConverter().toString(candidate), new SimpleObjectProperty<>(candidate));
         table.setTableItems(() -> (ObservableList) FXCollections.observableList(conventionsLiees));
         table.editableProperty().set(false);
         table.fichableProperty().set(false);
         return table;
     }
-    
+
     /**
-     * Renvoie les identifiants des conventions liées à un objet (Objet, 
+     * Renvoie les identifiants des conventions liées à un objet (Objet,
      * AotCotAssociable ou PositionConvention).
-     * 
+     *
      * @param candidate
-     * @return 
+     * @return
      */
     public static List<String> getConventionIdsForObjet(final Element candidate){
 
@@ -246,7 +247,7 @@ public class PluginAotCot extends Plugin {
         }
         return conventionLieesIds;
     }
-    
+
     /**
      * Récupère les alertes à afficher pour l'utilisateur, selon les dates fournies dans les obligations réglementaires
      * et la fréquence de rappel.
@@ -268,7 +269,7 @@ public class PluginAotCot extends Plugin {
 
             final StringBuilder sb = new StringBuilder();
             sb.append(new SirsStringConverter().toString(obligation));
-            
+
             if(obligation.getDate_fin().minusMonths(6).compareTo(LocalDate.now())<0
                     && obligation.getDate_fin().compareTo(LocalDate.now())>=0) // On ne veut pas d'alerte pour les conventions dont la date de fin est déjà dépassée
             alerts.add(new AlertItem(sb.toString(), obligation.getDate_fin(), obligation));

@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -27,14 +27,9 @@ import org.geotoolkit.gui.javafx.render2d.FXMap;
  * @author guilhem
  */
 public class LitBorneEditHandler extends BorneEditHandler {
-    
+
     public LitBorneEditHandler(FXMap map) {
-        super(map);
-    }
-    
-    @Override
-    protected void init() {
-        this.layerName = PluginLit.LAYER_NAME;
-        this.typeName = "berge";
+        super(map, "berge");
+        this.TRONCON_LAYER_NAME = PluginLit.LAYER_NAME;
     }
 }

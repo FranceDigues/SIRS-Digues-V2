@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import fr.sirs.theme.ui.*?>
+<?import fr.sirs.util.FXFreeTab?>
 <?import fr.sirs.util.FXFileTextField?>
 <?import fr.sirs.util.FXComponentField?>
 <?import org.geotoolkit.gui.javafx.util.*?>
@@ -159,15 +160,15 @@
         <Tab text="Ouvrages de régulation">
             <TabPane>
                 <tabs>
-                    <Tab fx:id="ui_ouvragesFreineurs" text="%ouvragesFreineurs"/>
-                    <Tab fx:id="ui_barrages" text="%barrages"/>
-                    <Tab fx:id="ui_autreOuvrages" text="%autreOuvrages"/>
+                    <FXFreeTab fx:id="ui_ouvragesFreineurs" text="%ouvragesFreineurs"/>
+                    <FXFreeTab fx:id="ui_barrages" text="%barrages"/>
+                    <FXFreeTab fx:id="ui_autreOuvrages" text="%autreOuvrages"/>
                 </tabs>
             </TabPane>
         </Tab>
-        <Tab fx:id="ui_photos" text="%photos"/>
-        <Tab fx:id="ui_proprietes" text="%proprietes"/>
-        <Tab fx:id="ui_gestions" text="%gestions"/>
+        <FXFreeTab fx:id="ui_photos" text="%photos"/>
+        <FXFreeTab fx:id="ui_proprietes" text="%proprietes"/>
+        <FXFreeTab fx:id="ui_gestions" text="%gestions"/>
 
       </tabs>
     </TabPane>

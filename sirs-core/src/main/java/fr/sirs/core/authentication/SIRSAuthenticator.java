@@ -24,9 +24,9 @@ import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 import java.net.URL;
 import java.util.AbstractMap;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 import javafx.application.Platform;
@@ -42,6 +42,7 @@ import javafx.scene.layout.GridPane;
  * An authenticator which will prompt a JavaFX dialog to query password from user.
  *
  * @author Alexis Manin (Geomatys)
+ * @author Matthieu Bastianelli (Geomatys)
  */
 public class SIRSAuthenticator extends Authenticator {
 
@@ -51,8 +52,22 @@ public class SIRSAuthenticator extends Authenticator {
      * Keep reference of checked entries, because if login information is wrong,
      * we'll know it and will prompt user.
      */
-    private final HashMap<String, Entry> entriesToCheck = new HashMap<>();
+    private static final Map<String, Entry> ENTRIES_TO_CHECK = new ConcurrentHashMap<>();
 
+
+    /**
+     * Récupération d'un mots de passe:
+     * Soit depuis AuthenticationWallet. 
+     * le demande à l'utilisateur ou teste celui déjà indiqué par l'utilisateur 
+     * via la Map ENTRIES_TO_CHECK. 
+     * En cas de succès, la méthode à l'origine de la demande de l'identification
+     * doit l'indiquer à cette classe à partir de la méthode statique :
+     * {@link #validEntry(java.net.URL)} afin de sauvegarder l'entrée valide.
+     * 
+     * Todo : autoriser plusieurs authentification pour une même base?
+     * 
+     * @return 
+     */
     @Override
     protected synchronized PasswordAuthentication getPasswordAuthentication() {
         // First, we retrieve target service information and check its integrity.
@@ -74,32 +89,69 @@ public class SIRSAuthenticator extends Authenticator {
         AuthenticationWallet.Entry entry = wallet == null? null : wallet.get(host, port);
 
         /*
-         * HACK : Apache HttpClient (used by Ektorp) will call this method on
-         * each query, which means we cannot determine if it is performing a
-         * fail&retry. As java.net methods give us the query URL, we can adopt
-         * different behavior for thee two components.
-         */
-        final boolean fromApache = (getRequestingURL() == null);
+//         * HACK : Apache HttpClient (used by Ektorp) will call this method on
+//         * each query, which means we cannot determine if it is performing a
+//         * fail&retry. As java.net methods give us the query URL, we can adopt
+//         * different behavior for thee two components.
+//         */
 
-        SirsCore.LOGGER.log(Level.FINE, "CREDENTIAL QUERY FROM "+ (fromApache? "APACHE" : "JAVA.NET"));
-
+        final Entry checkedEntry =  ENTRIES_TO_CHECK.get(serviceId);
+        final boolean nullEntryToCheck = checkedEntry == null;
+        
+        if ( (entry != null) &&   
+                (nullEntryToCheck || 
+                    (  ((!checkedEntry.checked)  && !(checkedEntry.equals(entry))) 
+                    && (checkedEntry.checked && ( (checkedEntry.equals(entry))))
+                    )
+                ) 
+            ){
+//           
         // We've got login from wallet, and it has not been rejected yet.
-        if (entry != null && (fromApache || entriesToCheck.get(serviceId) == null)) {
-            if (!fromApache) entriesToCheck.put(serviceId, entry);
-            return new PasswordAuthentication(entry.login, (entry.password == null)? new char[0] : entry.password.toCharArray());
+                // A priori l'attribut checked n'est plus nécessaire (car on ne sauvegarde que des identifiants
+                // valides. Je le conserve cependant au cas où l'identifiant et mots de passe
+                // sont changés. Les identifiants sauvegardés sont alors obsolètes.
+                if (!nullEntryToCheck && !checkedEntry.checked) {
+                    ENTRIES_TO_CHECK.put(serviceId, entry);
+                    checkedEntry.checked=true;
+                }
+                return new PasswordAuthentication(entry.login, (entry.password == null) ? new char[0] : entry.password.toCharArray());
 
         // New or invalid entry case.
         } else {
+            
             Map.Entry<String, String> login = askForLogin(entry == null? null : entry.login, entry == null? null : entry.password);
             if (login == null || login.getKey() == null) {
                 return null;
             } else {
                 entry = new AuthenticationWallet.Entry(host, port, login.getKey(), login.getValue());
-                entriesToCheck.put(serviceId, entry);
-                if (wallet != null) {
-                    wallet.put(entry);
-                }
+                ENTRIES_TO_CHECK.put(serviceId, entry);
                 return new PasswordAuthentication(login.getKey(), login.getValue() == null? new char[0] : login.getValue().toCharArray());
+            }
+        }
+    }
+    
+    /**
+     * Méthode à appeler lorsqu'une recette réussie.
+     * 
+     * on entre l'entrée validée dans la "wallet" avec ses attributs
+     * (checked) mis à jour. Puis on la retire de la Map.
+     * 
+     * Idéalement, il faudrait faire évoluer cette méthode pour n'entrer que l'entrée
+     * associée à la requête.
+     * 
+     * @param couchdbUrl : the url associated with the entries to validate.
+     */
+    public static void validEntry(URL couchdbUrl) {
+        if (couchdbUrl == null) {
+            throw new IllegalStateException("Neither host nor valid URL has been provided for authentication validation");
+        }
+        String serviceId = AuthenticationWallet.toServiceId(couchdbUrl);
+        
+        if (ENTRIES_TO_CHECK != null && ENTRIES_TO_CHECK.containsKey(serviceId)) {
+            final AuthenticationWallet wallet = AuthenticationWallet.getDefault();
+            if (wallet != null) {
+                wallet.put(ENTRIES_TO_CHECK.get(serviceId));
+                ENTRIES_TO_CHECK.remove(serviceId);
             }
         }
     }
@@ -151,11 +203,14 @@ public class SIRSAuthenticator extends Authenticator {
                 question.setHeaderText(headerText.toString());
 
                 Optional<ButtonType> result = question.showAndWait();
-                if (result.isPresent() && result.get().equals(ButtonType.OK)) {
-                    return new AbstractMap.SimpleEntry<>(userInput.getText(), passInput.getText());
-                } else {
-                    return null;
+                if (result.isPresent()) {
+                    if (result.get().equals(ButtonType.OK)) {
+                        return new AbstractMap.SimpleEntry<>(userInput.getText(), passInput.getText());
+                    } else if (result.get().equals(ButtonType.CANCEL)) {
+                        System.exit(0);
+                    }
                 }
+                return null;
             }
         };
 

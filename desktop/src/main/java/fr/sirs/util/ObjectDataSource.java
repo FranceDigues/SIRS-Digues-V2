@@ -25,7 +25,9 @@ import fr.sirs.core.component.Previews;
 import fr.sirs.core.model.AbstractObservation;
 import fr.sirs.core.model.AbstractPhoto;
 import fr.sirs.core.model.Element;
+import fr.sirs.core.model.OuvrageHydrauliqueAssocie;
 import fr.sirs.core.model.ReferenceType;
+import fr.sirs.core.model.ReseauHydrauliqueFerme;
 import fr.sirs.core.model.SIRSFileReference;
 import fr.sirs.core.model.Utilisateur;
 import fr.sirs.util.property.Reference;
@@ -33,11 +35,16 @@ import java.awt.Image;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.logging.Level;
+import javafx.collections.ObservableList;
 import javafx.embed.swing.SwingFXUtils;
 import net.sf.jasperreports.engine.JRDataSource;
 import net.sf.jasperreports.engine.JRException;
@@ -76,7 +83,7 @@ public class ObjectDataSource<T> implements JRDataSource {
 
     @Override
     public boolean next() throws JRException {
-        if(iterator.hasNext()) {
+        if (iterator.hasNext()) {
             currentObject = iterator.next();
             isPhoto = (currentObject instanceof AbstractPhoto);
             return true;
@@ -90,25 +97,63 @@ public class ObjectDataSource<T> implements JRDataSource {
         final String name = jrf.getName();
         try {
             if (isPhoto && Image.class.isAssignableFrom(jrf.getValueClass())) {
-                final Path docPath = SirsCore.getDocumentAbsolutePath((SIRSFileReference)currentObject);
+                final Path docPath = SirsCore.getDocumentAbsolutePath((SIRSFileReference) currentObject);
+                final javafx.scene.image.Image img;
                 if (Files.isReadable(docPath)) {
-                    return SwingFXUtils.fromFXImage(SIRS.getOrLoadImage(docPath.toUri().toString()), null);
+                    img = SIRS.getOrLoadImage(docPath.toUri().toString());
+                } else {
+                    img = null;
+                }
+
+                if (img != null) {
+                    return SwingFXUtils.fromFXImage(img, null);
                 } else {
                     return javax.imageio.ImageIO.read(ObjectDataSource.class.getResource("/fr/sirs/images/imgNotFound.png"));
                 }
             }
 
             final Method getter = currentObject.getClass().getMethod("get" + name.substring(0, 1).toUpperCase() + name.substring(1));
-            final Object propertyValue = getter.invoke(currentObject);
+            //final Object propertyValue = getter.invoke(currentObject);
+            Object propertyValue = getter.invoke(currentObject);
+
+            //System.out.println(currentObject);
+            if ((name.equals("commentaire")) && (propertyValue == null)) { // Mettre un enum à la place de commentaire à associer au reseauFields <-> JRColumnParameter
+
+                Boolean instanceOfOuvrageHydrauliqueAssocie = currentObject instanceof OuvrageHydrauliqueAssocie;
+                Boolean instanceOfReseauHydrauliqueFerme = currentObject instanceof ReseauHydrauliqueFerme;
+
+                // S'il n'y a pas de commentaire on récupère, si elle existe la dernière observation
+                // des ouvrages associés au réseau hydraulique fermé de la fiche
+                // (respectivement des réseaux hydrauliques fermés associé à l'ouvrage hydraulique associé de la fiche)
+                //
+                // Note :  la demande ne concernait pas les fiches désordres : doit-on l'impliquer dans cette modification?
+                // Les modifications réalisées devraient impliquer ces fiches (désordres) dans la rubrique 'réseaux et ouvrages'
+                // Mais pas dans la rubrique voirie.
+                if ((!(this instanceof ReseauHydrauliqueFermeDataSource)) && (!(this instanceof OuvrageHydrauliqueAssocieDataSource))
+                        && (instanceOfOuvrageHydrauliqueAssocie || instanceOfReseauHydrauliqueFerme)) {
+
+                    ObservableList<? extends AbstractObservation> observations;
+
+                    if (instanceOfOuvrageHydrauliqueAssocie) {
+                        observations = ((OuvrageHydrauliqueAssocie) currentObject).getObservations();
+
+                    } else { //(instanceOfReseauHydrauliqueFerme)
+                        observations = ((ReseauHydrauliqueFerme) currentObject).getObservations();
+                    }
+
+                    propertyValue = lastObservation(observations);
+
+                }
+
+            }
+
             if (propertyValue != null) {
                 final Reference ref = getter.getAnnotation(Reference.class);
-                if(ref!=null){
+                if (ref != null) {
                     return parsePropertyValue(propertyValue, ref.ref(), jrf.getValueClass());
-                }
-                else if(SirsCore.AUTHOR_FIELD.equals(name) && propertyValue instanceof String){
-                    return Injector.getSession().getRepositoryForClass(Utilisateur.class).get((String)propertyValue).getLogin();
-                }
-                else {
+                } else if (SirsCore.AUTHOR_FIELD.equals(name) && propertyValue instanceof String) {
+                    return Injector.getSession().getRepositoryForClass(Utilisateur.class).get((String) propertyValue).getLogin();
+                } else {
                     return parsePropertyValue(propertyValue, null, jrf.getValueClass());
                 }
             }
@@ -124,9 +169,12 @@ public class ObjectDataSource<T> implements JRDataSource {
     }
 
     /**
-     * Extract information from input object to put it in an object of queried type.
+     * Extract information from input object to put it in an object of queried
+     * type.
+     *
      * @param propertyValue The object to get data from.
-     * @param refClass If input object is a reference to an element, this class give the pointed element type. Can be null.
+     * @param refClass If input object is a reference to an element, this class
+     * give the pointed element type. Can be null.
      * @param outputClass The type of object to return.
      * @return Extracted information, or null if analysis failed.
      */
@@ -146,20 +194,19 @@ public class ObjectDataSource<T> implements JRDataSource {
         if (refClass != null) {
             if (!refClass.isAssignableFrom(propertyValue.getClass()) && (propertyValue instanceof String)) {
                 if (ReferenceType.class.isAssignableFrom(refClass)) {
-                    propertyValue = Injector.getSession().getRepositoryForClass(refClass).get((String)propertyValue);
+                    propertyValue = Injector.getSession().getRepositoryForClass(refClass).get((String) propertyValue);
                 } else {
-                    propertyValue = previewRepository.get((String)propertyValue);
+                    propertyValue = previewRepository.get((String) propertyValue);
                 }
             }
         }
 
         // 2a- Cas général des propriétés simples  : le type demandé correspond au type du champ.
-        if (outputClass.isAssignableFrom(propertyValue.getClass())){
+        if (outputClass.isAssignableFrom(propertyValue.getClass())) {
             // Si la valeur est une chaîne de caractères, on force le remplacement de la police de caractères au cas où il s'agirait de HTML.
-            if(propertyValue instanceof String){
+            if (propertyValue instanceof String) {
                 return forceArialFontFace((String) propertyValue);
-            }
-            else {
+            } else {
                 return propertyValue;
             }
         }
@@ -167,54 +214,106 @@ public class ObjectDataSource<T> implements JRDataSource {
         // 2b- Cas des "références" et des prévisualisations : on confie la conversion en chaîne de caractères au convertisseur du SIRS.
         if (String.class.isAssignableFrom(outputClass)) {
             return stringConverter.toString(propertyValue);
-        }
-
-        // 2c- ?
+        } // 2c- ?
         else {
             return ObjectConverters.convert(propertyValue, outputClass);
         }
     }
 
     /**
-     * Force la police de caractère indiquée dans les champs formatés en HTML à utiliser la fonte Arial partout où elle est précisée.
+     * Force la police de caractère indiquée dans les champs formatés en HTML à
+     * utiliser la fonte Arial partout où elle est précisée.
      *
      * @param value
      * @return
      */
-    static String forceArialFontFace(final String value){
+    static String forceArialFontFace(final String value) {
         return value.replaceAll("font face=\"[^\"]*\"", "font face=\"Arial\"");
     }
 
     /**
-     * Pour le classement des observations de la plus récente à la plus ancienne.
+     * Pour le classement des observations de la plus récente à la plus
+     * ancienne.
      */
     static final Comparator<AbstractObservation> OBSERVATION_COMPARATOR = (o1, o2) -> {
-        if(o1==null && o2==null) return 0;
-        else if(o1==null || o2==null) return (o1==null) ? -1 : 1;
-        else if(o1.getDate()==null && o2.getDate()==null) return 0;
-        else if(o1.getDate()==null || o2.getDate()==null) return (o1.getDate()==null) ? 1 : -1;
-        else return -o1.getDate().compareTo(o2.getDate());
+        if (o1 == null && o2 == null) {
+            return 0;
+        } else if (o1 == null || o2 == null) {
+            return (o1 == null) ? -1 : 1;
+        } else if (o1.getDate() == null && o2.getDate() == null) {
+            return 0;
+        } else if (o1.getDate() == null || o2.getDate() == null) {
+            return (o1.getDate() == null) ? 1 : -1;
+        } else {
+            return -o1.getDate().compareTo(o2.getDate());
+        }
     };
 
     /**
-     * Pour le classement des photographies de la plus récente à la plus ancienne.
+     * Pour le classement des photographies de la plus récente à la plus
+     * ancienne.
      */
     static final Comparator<AbstractPhoto> PHOTO_COMPARATOR = (p1, p2) -> {
-        if(p1==null && p2==null) return 0;
-        else if(p1==null || p2==null) return (p1==null) ? -1 : 1;
-        else if(p1.getDate()==null && p2.getDate()==null) return 0;
-        else if(p1.getDate()==null || p2.getDate()==null) return (p1.getDate()==null) ? 1 : -1;
-        else return -p1.getDate().compareTo(p2.getDate());
+        if (p1 == null && p2 == null) {
+            return 0;
+        } else if (p1 == null || p2 == null) {
+            return (p1 == null) ? -1 : 1;
+        } else if (p1.getDate() == null && p2.getDate() == null) {
+            return 0;
+        } else if (p1.getDate() == null || p2.getDate() == null) {
+            return (p1.getDate() == null) ? 1 : -1;
+        } else {
+            return -p1.getDate().compareTo(p2.getDate());
+        }
     };
 
     /**
      * Pour le classement des éléments par désignation (ordre alphabétique).
      */
     static final Comparator<Element> ELEMENT_COMPARATOR = (p1, p2) -> {
-        if(p1==null && p2==null) return 0;
-        else if(p1==null || p2==null) return (p1==null) ? -1 : 1;
-        else if(p1.getDesignation()==null && p2.getDesignation()==null) return 0;
-        else if(p1.getDesignation()==null || p2.getDesignation()==null) return (p1.getDesignation()==null) ? 1 : -1;
-        else return p1.getDesignation().compareTo(p2.getDesignation());
+        if (p1 == null && p2 == null) {
+            return 0;
+        } else if (p1 == null || p2 == null) {
+            return (p1 == null) ? -1 : 1;
+        } else if (p1.getDesignation() == null && p2.getDesignation() == null) {
+            return 0;
+        } else if (p1.getDesignation() == null || p2.getDesignation() == null) {
+            return (p1.getDesignation() == null) ? 1 : -1;
+        } else {
+            return p1.getDesignation().compareTo(p2.getDesignation());
+        }
     };
+
+    /**
+     * Méthode retournant la dernière observation parmi une observable liste
+     * d'objet héritant de la classe AbstractObservation
+     *
+     * @param observations
+     * @return
+     */
+    static final String lastObservation(ObservableList<? extends AbstractObservation> observations) {
+        if ((observations!=null) && (observations.size() > 0)) {
+            
+             //min car OBSERVATION_COMPARATOR classe les observations dans l'ordre inverse des dates (LocalDate)
+            AbstractObservation lastObservation = Collections.min(observations, OBSERVATION_COMPARATOR);
+            
+            Optional<LocalDate> observationDate = Optional.ofNullable(lastObservation.getDate());
+            Optional<String> observationEvolution = Optional.ofNullable(lastObservation.getEvolution());
+
+            if (observationEvolution.isPresent()) {
+                return observationDate.map(obsDate
+                        -> "Observation du "
+                        + obsDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                        + " : " + observationEvolution.get())
+                        .orElse("Observation : " + observationEvolution.get());
+            }else if(observationDate.isPresent()){
+                return "Observation du "
+                        + observationDate.get().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+                        + " : pas d'évolution renseignée.";
+            }
+        }
+
+        return "Ni commentaire ni observation.";
+    }
+
 }

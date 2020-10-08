@@ -23,6 +23,7 @@ import com.vividsolutions.jts.geom.MultiPolygon;
 import com.vividsolutions.jts.geom.Polygon;
 import fr.sirs.Injector;
 import fr.sirs.core.model.CheminAccesDependance;
+import fr.sirs.util.SIRSAreaComputer;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.fxml.FXML;
@@ -75,10 +76,11 @@ public class FXCheminAccesDependancePane extends FXCheminAccesDependancePaneStub
 
     private void setGeometrySize(final Geometry geometry) {
         if (geometry != null) {
+
             if (geometry instanceof Polygon || geometry instanceof MultiPolygon) {
                 lblGeomSize.setText("Surface");
                 geomSize.setText(NumberFormat.getNumberInstance().format(
-                        MeasureUtilities.calculateArea(geometry, Injector.getSession().getProjection(), Units.SQUARE_METRE)) +" m2");
+                        SIRSAreaComputer.calculateArea(geometry, Injector.getSession().getProjection(), Units.SQUARE_METRE)) +" m2");
             } else {
                 lblGeomSize.setText("Longueur");
                 geomSize.setText(NumberFormat.getNumberInstance().format(

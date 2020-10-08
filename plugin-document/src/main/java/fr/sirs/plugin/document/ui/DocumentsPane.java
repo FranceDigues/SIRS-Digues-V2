@@ -57,6 +57,7 @@ import fr.sirs.core.component.ModeleRapportRepository;
 import fr.sirs.core.component.TronconDigueRepository;
 import fr.sirs.core.model.SystemeEndiguement;
 import fr.sirs.core.model.Digue;
+import fr.sirs.core.model.Role;
 import fr.sirs.core.model.TronconDigue;
 import fr.sirs.core.model.report.ModeleRapport;
 import fr.sirs.plugin.document.DynamicDocumentTheme;
@@ -74,12 +75,14 @@ import java.util.Set;
 import java.util.prefs.Preferences;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
 import javafx.concurrent.Task;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import org.apache.sis.measure.NumberRange;
 import org.geotoolkit.nio.IOUtilities;
 
 /**
@@ -144,6 +147,8 @@ public class DocumentsPane extends GridPane {
     public static final String DYNAMIC          = "dynamic";
     public static final String MODELE           = "modele";
     public static final String HIDDEN           = "hidden";
+    public static final String DATE_RANGE_MIN   = "dateRangeMin";
+    public static final String DATE_RANGE_MAX   = "dateRangeMax";
 
     public static final String SE = "se";
     public static final String TR = "tr";
@@ -351,6 +356,24 @@ public class DocumentsPane extends GridPane {
             addFolderButton.disableProperty().set(true);
             listButton .disableProperty().set(true);
         }
+
+
+        final BooleanBinding guestOrExtern = new BooleanBinding() {
+
+            {
+                bind(Injector.getSession().roleBinding());
+            }
+
+            @Override
+            protected boolean computeValue() {
+                final Role userRole = Injector.getSession().roleBinding().get();
+                return Role.GUEST.equals(userRole)
+                        || Role.EXTERN.equals(userRole);
+            }
+        };
+
+        setFolderButton.disableProperty().bind(guestOrExtern);
+        deleteDocButton.disableProperty().bind(guestOrExtern);
     }
 
     @FXML
@@ -429,6 +452,7 @@ public class DocumentsPane extends GridPane {
                 final Preferences prefs = Preferences.userRoot().node("DocumentPlugin");
                 prefs.put(ROOT_FOLDER, rootPath);
                 importDocButton.disableProperty().set(false);
+                deleteDocButton.disableProperty().unbind();
                 deleteDocButton.disableProperty().set(false);
                 addDocButton.disableProperty().set(false);
                 addFolderButton.disableProperty().set(false);
@@ -701,10 +725,20 @@ public class DocumentsPane extends GridPane {
         private void regenerateDynamicDocument(final File item) {
             final ModeleRapportRepository modelRepo = Injector.getBean(ModeleRapportRepository.class);
             String modelId = getProperty(item, MODELE);
+            final String dateRangeMin = getProperty(item, DocumentsPane.DATE_RANGE_MIN);
+            final String dateRangeMax = getProperty(item, DocumentsPane.DATE_RANGE_MAX);
+
+            final NumberRange dateRange;
+            if(dateRangeMin.isEmpty() && dateRangeMax.isEmpty()) {
+                dateRange = null;
+            } else {
+                dateRange = NumberRange.create(dateRangeMin.isEmpty() ? 0 : Long.parseLong(dateRangeMin), true,
+                        dateRangeMax.isEmpty() ? Long.MAX_VALUE : Long.parseLong(dateRangeMax), true);
+            }
             if (modelId != null && !modelId.isEmpty()) {
                 final ModeleRapport modele = modelRepo.get(modelId);
                 if (modele != null) {
-                    final Task<File> generator = ODTUtils.generateDoc(modele, getTronconList(), item, root.getLibelle());
+                    final Task<File> generator = ODTUtils.generateDoc(modele, getTronconList(), item, root.getLibelle(), dateRange);
                     generator.setOnSucceeded(evt -> Platform.runLater(() -> root.update(false)));
                     LoadingPane.showDialog(generator);
                 } else {

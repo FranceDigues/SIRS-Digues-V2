@@ -30,6 +30,7 @@ import fr.sirs.ui.Growl;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.List;
+import java.util.function.Function;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
@@ -55,6 +56,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
+import org.apache.sis.util.collection.Cache;
 import org.geotoolkit.font.FontAwesomeIcons;
 import org.geotoolkit.font.IconBuilder;
 import org.geotoolkit.gui.javafx.util.FXUtilities;
@@ -74,6 +76,12 @@ public class FXBookMarks extends GridPane {
     @FXML private Button uiDelete;
     @FXML private Button uiAdd;
     private final AbstractSIRSRepository<BookMark> repo = Injector.getSession().getRepositoryForClass(BookMark.class);
+
+    // cache des panneaux de favoris
+    private final Cache<BookMark, AbstractFXElementPane> cache = new Cache<>();
+
+    // référence vers le dernier favori nouvellement créé
+    private BookMark newlyCreated;
 
     public FXBookMarks(){
         SIRS.loadFXML(this, FXBookMarks.class);
@@ -109,7 +117,7 @@ public class FXBookMarks extends GridPane {
         if(bookmark==null) return;
 
         final Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
-                "Confirmer la suppression du favori "+bookmark.getDesignation()+" ?",
+                String.format("Confirmer la suppression du favori %s ?", bookmark.getDesignation()),
                 ButtonType.YES, ButtonType.NO);
         alert.setResizable(true);
         final ButtonType res = alert.showAndWait().get();
@@ -126,22 +134,39 @@ public class FXBookMarks extends GridPane {
         bookmark.setDesignation("");
         bookmark.setTitre("pas de nom");
         repo.add(bookmark);
+
+        // on référence le favori nouvellement créé pour l'ouvrir éventuellement en édition.
+        this.newlyCreated = bookmark;
+
+        this.uiTable.getSelectionModel().select(bookmark);
     }
 
     private void selectionChanged(ObservableValue<? extends BookMark> observable, BookMark oldValue, BookMark newValue){
         uiConfig.setCenter(null);
         if(newValue!=null){
-            final AbstractFXElementPane editPane = SIRS.generateEditionPane(newValue);
 
-            final Session session = Injector.getSession();
-            final Role role = session.getRole();
-            if(!Role.ADMIN.equals(role)){
-                final FXEditMode searchEditMode = searchEditMode(editPane);
-                if(searchEditMode!=null){
-                    searchEditMode.setVisible(false);
-                    searchEditMode.setManaged(false);
+            final AbstractFXElementPane editPane = cache.computeIfAbsent(newValue,
+                    new Function<BookMark, AbstractFXElementPane>() {
+                @Override
+                public AbstractFXElementPane apply(BookMark bm) {
+                    final AbstractFXElementPane pane = SIRS.generateEditionPane(bm, b -> b == newlyCreated);
+
+                    final Session session = Injector.getSession();
+                    final Role role = session.getRole();
+                    final FXEditMode searchEditMode = searchEditMode(pane);
+
+                    // seul l'admin semble habilité à ajouter/supprimer des favoris et à les éditer
+                    if(!Role.ADMIN.equals(role)){
+                        if(searchEditMode!=null){
+                            searchEditMode.setVisible(false);
+                            searchEditMode.setManaged(false);
+                        }
+                    } else if (bm == newlyCreated) {
+                        searchEditMode.editionState().set(true);
+                    }
+                    return pane;
                 }
-            }
+            });
 
             uiConfig.setCenter(editPane);
         }

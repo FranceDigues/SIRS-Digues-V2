@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -22,11 +22,14 @@ import fr.sirs.Injector;
 import fr.sirs.SIRS;
 import fr.sirs.Session;
 import fr.sirs.core.model.AvecForeignParent;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.Preview;
 import fr.sirs.core.model.TronconDigue;
 import fr.sirs.theme.AbstractTheme;
 import fr.sirs.theme.TronconTheme;
 import fr.sirs.util.SimpleFXEditMode;
+import java.util.List;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ObservableValue;
@@ -48,6 +51,14 @@ import javafx.scene.layout.Priority;
  * @author Johann Sorel (Geomatys)
  */
 public class FXTronconThemePane extends BorderPane {
+
+    // Préview spécifique pour l'affichage des objets n'ayant pas d'identifiant de tronçon.(SYM-1765)
+    private static final Preview EMPTY_PREVIEW = new Preview();
+
+    static {
+        EMPTY_PREVIEW.setElementClass(TronconDigue.class.getCanonicalName());
+        EMPTY_PREVIEW.setLibelle("   Pas de tronçon de rattachement - objets orphelins   ");
+    }
 
     @FXML private BorderPane uiCenter;
     @FXML private ComboBox<Preview> uiLinearChoice;
@@ -85,9 +96,13 @@ public class FXTronconThemePane extends BorderPane {
                 linearIdProperty.set(newValue.getElementId());
             }
         });
-        
-        final ObservableList<Preview> linearPreviews = SIRS.observableList(session.getPreviews().getByClass(TronconDigue.class)).sorted();
-        SIRS.initCombo(uiLinearChoice, linearPreviews, linearPreviews.isEmpty()? null : linearPreviews.get(0));
+
+        final List<Preview> byClass = session.getPreviews().getByClass(TronconDigue.class);
+        if(!byClass.contains(EMPTY_PREVIEW)){
+            byClass.add(EMPTY_PREVIEW);
+        }
+        final ObservableList<Preview> linearPreviews = SIRS.observableList(byClass).sorted();
+        SIRS.initCombo(uiLinearChoice, linearPreviews, linearPreviews.isEmpty() ? null : linearPreviews.get(0));
 
     }
 
@@ -95,14 +110,14 @@ public class FXTronconThemePane extends BorderPane {
 
         private final TronconTheme.ThemeManager<T> group;
 
-        public TronconThemePojoTable(TronconTheme.ThemeManager<T> group) {
-            super(group.getDataClass(), group.getTableTitle());
+        public TronconThemePojoTable(TronconTheme.ThemeManager<T> group, final ObjectProperty<? extends Element> container) {
+            super(group.getDataClass(), group.getTableTitle(), container);
             foreignParentIdProperty.addListener(this::updateTable);
             this.group = group;
         }
 
         private void updateTable(ObservableValue<? extends String> observable, String oldValue, String newValue){
-            if(newValue==null || group==null) {
+            if(group==null) {
                 setTableItems(FXCollections::emptyObservableList);
             } else {
                 setTableItems(() -> (ObservableList) group.getExtractor().apply(newValue));
@@ -111,17 +126,21 @@ public class FXTronconThemePane extends BorderPane {
     }
 
     protected Parent createContent(AbstractTheme.ThemeManager manager) {
+        
+        //Composant : Consultation/Edition
         final Separator separator = new Separator();
         separator.setVisible(false);
         final SimpleFXEditMode editMode = new SimpleFXEditMode();
         final HBox topPane = new HBox(separator, editMode);
         HBox.setHgrow(separator, Priority.ALWAYS);
 
-        final TronconThemePojoTable table = new TronconThemePojoTable(manager);
+        //Création de la TronconThemePojoTable
+        final TronconThemePojoTable table = new TronconThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
         table.setDeletor(manager.getDeletor());
         table.editableProperty.bind(editMode.editionState());
         table.foreignParentProperty().bindBidirectional(linearIdProperty);
 
+        // Remplissage du BorderPane parent (englobant) (center, top, right, bottom, left). 
         return new BorderPane(table, topPane, null, null, null);
     }
 }

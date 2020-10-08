@@ -33,6 +33,7 @@ import fr.sirs.core.model.SystemeReperageBorne;
 import fr.sirs.core.model.TronconDigue;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Predicate;
 import org.apache.sis.test.DependsOnMethod;
 import org.ektorp.DocumentOperationResult;
 import org.geotoolkit.display2d.GO2Utilities;
@@ -300,25 +301,42 @@ public class TronconUtilsTest extends CouchDBTestCase {
     @Test
     @DependsOnMethod("dataIntegrityTest")
     public void archive() {
+        
+        // Initial state : check all the archive dates to be null.
+        assertNull("End date of \"TronconDigue\" differs from queried one", troncon.getDate_fin());
+        assertNull("End date of \"Crete\" differs from queried one", crete.getDate_fin());
+        final List<BorneDigue> bornes = session.getRepositoryForClass(BorneDigue.class).get(troncon.getBorneIds());
+        Assume.assumeFalse("No borne to test archive operation on.", bornes.isEmpty());
+        for (final BorneDigue b : bornes) {
+            assertNull("End date of \"Borne\" differs from queried one", b.getDate_fin());
+        }
+        
         // First, we test that we can archive objects with no end date.
         final LocalDate now = LocalDate.now();
-        List<DocumentOperationResult> errors = TronconUtils.archiveSectionWithTemporalObjects(troncon, session, now, false);
+        final Predicate<AvecBornesTemporelles> archiveIf = new AvecBornesTemporelles.ArchivePredicate(null);
+        List<DocumentOperationResult> errors = TronconUtils.archiveSectionWithTemporalObjects(troncon, session, now, archiveIf);
+        errors.addAll(TronconUtils.archiveBornes(troncon.getBorneIds(), session, now, archiveIf));
         assertTrue("Errors occurred while update", errors.isEmpty());
         checkArchiveDate(now);
 
         // Secondly, we test that we can update archive date
         final LocalDate tomorrow = now.plusDays(1);
-        errors = TronconUtils.updateArchiveSectionWithTemporalObjects(troncon, session, now, tomorrow);
+        final Predicate<AvecBornesTemporelles> updateIf = new AvecBornesTemporelles.UpdateArchivePredicate(now);
+        errors = TronconUtils.archiveSectionWithTemporalObjects(troncon, session, tomorrow, updateIf);
+        errors.addAll(TronconUtils.archiveBornes(troncon.getBorneIds(), session, tomorrow, updateIf));
+//                updateArchiveSectionWithTemporalObjects(troncon, session, now, tomorrow);
         assertTrue("Errors occurred while update", errors.isEmpty());
         checkArchiveDate(tomorrow);
 
         // Finally, we try to remove previously set date.
-        errors = TronconUtils.unarchiveSectionWithTemporalObjects(troncon, session, tomorrow);
+//        errors = TronconUtils.unarchiveSectionWithTemporalObjects(troncon, session, tomorrow);
+        final Predicate<AvecBornesTemporelles> unArchiveIf = new AvecBornesTemporelles.UnArchivePredicate(tomorrow);
+        errors = TronconUtils.archiveSectionWithTemporalObjects(troncon, session, null, unArchiveIf);
+        errors.addAll(TronconUtils.archiveBornes(troncon.getBorneIds(), session, null, unArchiveIf));
         assertTrue("Errors occurred while update", errors.isEmpty());
         assertNull("End date of updated \"TronconDigue\" differs from queried one", troncon.getDate_fin());
         assertNull("End date of updated \"Crete\" differs from queried one", crete.getDate_fin());
 
-        final List<BorneDigue> bornes = session.getRepositoryForClass(BorneDigue.class).get(troncon.getBorneIds());
         Assume.assumeFalse("No borne to test archive operation on.", bornes.isEmpty());
         for (final BorneDigue b : bornes) {
             assertNull("End date of updated \"Borne\" differs from queried one", b.getDate_fin());

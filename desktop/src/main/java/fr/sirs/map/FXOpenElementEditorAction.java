@@ -40,8 +40,12 @@ import javafx.scene.control.DialogPane;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.TextArea;
+import javafx.scene.effect.Light.Point;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
+import javafx.scene.layout.Pane;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.stage.Modality;
 import org.geotoolkit.data.bean.BeanFeature;
@@ -96,9 +100,12 @@ public class FXOpenElementEditorAction extends FXMapAction {
 
         private final AbstractMouseHandler mouseListener;
 
-        public OpenElementEditorHandler(FXMap map) {
+        final Rectangle selection = new Rectangle();
+        final Point anchor = new Point();
+
+        public OpenElementEditorHandler(final FXMap map) {
             super();
-            mouseListener = new InfoMouseListener();
+            mouseListener = new InfoMouseListener(anchor, selection);
         }
 
         /**
@@ -110,6 +117,38 @@ public class FXOpenElementEditorAction extends FXMapAction {
             map.addEventHandler(MouseEvent.MOUSE_CLICKED, mouseListener);
             map.addEventHandler(ScrollEvent.SCROLL, mouseListener);
             map.setCursor(Cursor.DEFAULT);
+
+            //====================================
+            //Mise en place du carré de sélection
+            //====================================
+
+            Pane root = this.decorationPane;
+//            final Rectangle selection = new Rectangle();
+//            final Point anchor = new Point();
+
+            map.setOnMousePressed(event -> {
+                anchor.setX(event.getX());
+                anchor.setY(event.getY());
+                selection.setX(event.getX());
+                selection.setY(event.getY());
+                selection.setFill(null); // transparent
+                selection.setStroke(Color.BLUE); // border
+                selection.getStrokeDashArray().add(10.0);
+                root.getChildren().add(selection);
+            });
+
+            map.setOnMouseDragged(event -> {
+                selection.setWidth(Math.abs(event.getX() - anchor.getX()));
+                selection.setHeight(Math.abs(event.getY() - anchor.getY()));
+                selection.setX(Math.min(anchor.getX(), event.getX()));
+                selection.setY(Math.min(anchor.getY(), event.getY()));
+            });
+
+            map.setOnMouseReleased(event -> {
+                root.getChildren().remove(selection);
+            });
+            //====================================
+
             SIRS.LOGGER.log(Level.FINE, "Information handler installed.");
         }
 
@@ -125,14 +164,18 @@ public class FXOpenElementEditorAction extends FXMapAction {
             return true;
         }
 
-
         private class InfoMouseListener extends FXPanMouseListen {
 
             final ContextMenu choice = new ContextMenu();
+            //Attributs liés au carré de sélection.
+            Rectangle selection;
+            Point anchor;
 
-            public InfoMouseListener() {
+            public InfoMouseListener(final Point anchor, final Rectangle selection) {
                 super(OpenElementEditorHandler.this);
                 choice.setAutoHide(true);
+                this.selection = selection;
+                this.anchor = anchor;
             }
 
             @Override
@@ -197,12 +240,25 @@ public class FXOpenElementEditorAction extends FXMapAction {
                         } else if (externalFeatures.size() == 1) {
 
                         }
+                        //remise à 0 du carré de sélection
+                        selection.setWidth(0);
+                        selection.setHeight(0);
                     }
                 };
 
-                Rectangle2D.Double searchArea = new Rectangle2D.Double(
-                        getMouseX(me) - POINT_RADIUS, getMouseY(me) - POINT_RADIUS, POINT_RADIUS * 2, POINT_RADIUS * 2);
+                //Recherche sur la surface couverte par le carré de sélection.
+                final Rectangle2D.Double searchArea;
+                final double selectionWidth  = this.selection.getWidth();
+                final double selectionHeight = this.selection.getHeight();
+                if( (selectionWidth > POINT_RADIUS) || (selectionHeight >POINT_RADIUS) ) {
+                    searchArea = new Rectangle2D.Double(
+                        anchor.getX(), anchor.getY(), selection.getWidth(), selection.getHeight());
+                }  else {
+                    searchArea = new Rectangle2D.Double(
+                        anchor.getX()-(POINT_RADIUS/2), anchor.getY() - (POINT_RADIUS/2), POINT_RADIUS, POINT_RADIUS);
+                }
                 map.getCanvas().getGraphicsIn(searchArea, visitor, VisitFilter.INTERSECTS);
+
             }
         }
 

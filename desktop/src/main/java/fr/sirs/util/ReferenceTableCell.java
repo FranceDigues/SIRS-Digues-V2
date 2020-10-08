@@ -20,7 +20,6 @@ package fr.sirs.util;
 
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
-import fr.sirs.Session;
 import fr.sirs.core.SirsCore;
 import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.component.DocumentChangeEmiter;

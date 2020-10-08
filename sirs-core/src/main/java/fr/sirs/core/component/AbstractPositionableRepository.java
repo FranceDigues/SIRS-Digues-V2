@@ -22,8 +22,10 @@ import fr.sirs.core.InjectorCore;
 import fr.sirs.core.SessionCore;
 import fr.sirs.core.SirsCore;
 import fr.sirs.core.TronconUtils;
+import fr.sirs.core.model.Desordre;
 import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.TronconDigue;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import fr.sirs.util.StreamingIterable;
 import java.util.List;
 import java.util.logging.Level;
@@ -31,7 +33,9 @@ import org.apache.sis.util.ArgumentChecks;
 import org.ektorp.CouchDbConnector;
 
 /**
- * A repository to access the view giving positionable objects by {@link TronconDigue}.
+ * A repository to access the view giving positionable objects by
+ * {@link TronconDigue}.
+ *
  * @author Samuel Andrés (Geomatys)
  * @param <T> Type of object managed by this repository.
  */
@@ -47,7 +51,6 @@ public abstract class AbstractPositionableRepository<T extends Positionable> ext
     }
 
     public List<T> getByLinearId(final String linearId) {
-        ArgumentChecks.ensureNonNull("Linear", linearId);
         return cacheList(globalRepo.getByLinearId(type, linearId));
     }
 
@@ -64,8 +67,21 @@ public abstract class AbstractPositionableRepository<T extends Positionable> ext
     @Override
     protected T onLoad(T loaded) {
         loaded = super.onLoad(loaded);
-        if (loaded.getGeometry() == null)
+        boolean toSave = false;
+        try {
+            toSave = ConvertPositionableCoordinates.COMPUTE_MISSING_COORD.test(loaded);
+        } catch (ClassCastException cce) {
+            SirsCore.LOGGER.log(Level.WARNING, "Echec du calcul de coordonnées pour l'élément chargé : \n" + loaded.toString(), cce);
+        }
+
+        if (loaded.getGeometry() == null) {
             updateGeometryAndPRs(loaded);
+        }
+
+        if (toSave) {
+            update(loaded);
+        }
+
         return loaded;
     }
 
@@ -73,9 +89,10 @@ public abstract class AbstractPositionableRepository<T extends Positionable> ext
         try {
             final TronconUtils.PosInfo posInfo = new TronconUtils.PosInfo(target);
             if (posInfo.getTroncon() != null) {
-                posInfo.getGeometry();
-                // Try computing PRs on default SR
-                TronconUtils.computePRs(posInfo, InjectorCore.getBean(SessionCore.class));
+                if (posInfo.getGeometry() != null) {
+                    // Try computing PRs on default SR
+                    TronconUtils.computePRs(posInfo, InjectorCore.getBean(SessionCore.class));
+                }
             }
         } catch (Exception e) {
             SirsCore.LOGGER.log(Level.WARNING, "Cannot update geometry for newly loaded positionable object.", e);

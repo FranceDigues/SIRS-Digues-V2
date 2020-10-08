@@ -30,12 +30,14 @@ import fr.sirs.core.LinearReferencingUtilities;
 import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.TronconDigue;
 import static fr.sirs.theme.ui.FXPositionableMode.fxNumberValue;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import fr.sirs.util.FormattedDoubleConverter;
 import fr.sirs.util.SirsStringConverter;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Level;
 import java.util.stream.Stream;
 import javafx.application.Platform;
 import javafx.beans.Observable;
@@ -55,6 +57,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
+import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.image.ImageView;
@@ -91,17 +94,27 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
     private final ObjectProperty<Positionable> posProperty = new SimpleObjectProperty<>();
     protected final BooleanProperty disableProperty = new SimpleBooleanProperty(true);
 
-    @FXML protected ComboBox<CoordinateReferenceSystem> uiCRSs;
-    @FXML protected Spinner<Double> uiLongitudeStart;
-    @FXML protected Spinner<Double> uiLongitudeEnd;
-    @FXML protected Spinner<Double> uiLatitudeStart;
-    @FXML protected Spinner<Double> uiLatitudeEnd;
+    @FXML
+    protected ComboBox<CoordinateReferenceSystem> uiCRSs;
+    @FXML
+    protected Spinner<Double> uiLongitudeStart;
+    @FXML
+    protected Spinner<Double> uiLongitudeEnd;
+    @FXML
+    protected Spinner<Double> uiLatitudeStart;
+    @FXML
+    protected Spinner<Double> uiLatitudeEnd;
+
+    @FXML
+    protected Label uiGeoCoordLabel;
 
     private Button uiImport;
 
     private boolean reseting = false;
-    public boolean isReseting(){return reseting;}
-    public void setReseting(final boolean res){reseting = res;}
+
+    public void setReseting(boolean reseting) {
+        this.reseting = reseting;
+    }
 
     public FXPositionableAbstractCoordMode() {
         SIRS.loadFXML(this, Positionable.class);
@@ -113,10 +126,10 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
         uiImport.setOnAction(this::importCoord);
         uiImport.visibleProperty().bind(disableProperty.not());
 
-        uiLongitudeStart.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0,1));
-        uiLatitudeStart.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0,1));
-        uiLongitudeEnd.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0,1));
-        uiLatitudeEnd.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0,1));
+        uiLongitudeStart.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0, 1));
+        uiLatitudeStart.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0, 1));
+        uiLongitudeEnd.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0, 1));
+        uiLatitudeEnd.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(-Double.MAX_VALUE, Double.MAX_VALUE, 0, 1));
         uiLongitudeStart.setEditable(true);
         uiLatitudeStart.setEditable(true);
         uiLongitudeEnd.setEditable(true);
@@ -145,13 +158,20 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
         final ChangeListener<Geometry> geomListener = new ChangeListener<Geometry>() {
             @Override
             public void changed(ObservableValue<? extends Geometry> observable, Geometry oldValue, Geometry newValue) {
-                if(reseting) return;
+                if (reseting) {
+                    return;
+                }
                 updateFields();
             }
         };
 
         // Listener pour les changements sur les points de début et de fin, dans le cadre de l'import de bornes par exemple.
-        final ChangeListener<Point> pointListener = (obs, oldVal, newVal) ->  updateFields();
+        final ChangeListener<Point> pointListener = (obs, oldVal, newVal) -> updateFields();
+
+        //Listener permettant d'indiquer si les coordonnées sont calculées ou éditées
+        final ChangeListener<Boolean> updateEditedGeoCoordinatesDisplay = (ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            setCoordinatesLabel(oldValue, newValue);
+        };
 
         posProperty.addListener(new ChangeListener<Positionable>() {
             @Override
@@ -160,11 +180,14 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
                     oldValue.geometryProperty().removeListener(geomListener);
                     oldValue.positionDebutProperty().removeListener(pointListener);
                     oldValue.positionFinProperty().removeListener(pointListener);
+                    oldValue.editedGeoCoordinateProperty().removeListener(updateEditedGeoCoordinatesDisplay);
                 }
                 if (newValue != null) {
                     newValue.geometryProperty().addListener(geomListener);
                     newValue.positionDebutProperty().addListener(pointListener);
                     newValue.positionFinProperty().addListener(pointListener);
+                    newValue.editedGeoCoordinateProperty().addListener(updateEditedGeoCoordinatesDisplay);
+                    setCoordinatesLabel(null, newValue.getEditedGeoCoordinate());
                     updateFields();
                 }
             }
@@ -179,12 +202,35 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
         uiCRSs.valueProperty().addListener(this::crsChange);
     }
 
+    /**
+     * Méthode permettant de mettre à jour le label (FXML) indiquant si les
+     * coordonnées du mode ont été calculées ou éditées.
+     *
+     * @param oldEditedGeoCoordinate ancienne valeur de la propriété
+     * editedGeoCoordinate du positionable courant. Null si ont l'ignore.
+     * @param newEditedGeoCoordinate nouvelle valeur.
+     */
+    protected void setCoordinatesLabel(Boolean oldEditedGeoCoordinate, Boolean newEditedGeoCoordinate) {
+        if (newEditedGeoCoordinate == null) {
+            uiGeoCoordLabel.setText("Le mode d'obtention du type de coordonnées n'est pas renseigné.");
+            return;
+        } else if ((oldEditedGeoCoordinate != null) && (oldEditedGeoCoordinate.equals(newEditedGeoCoordinate))) {
+            return;
+        }
+
+        if (newEditedGeoCoordinate) {
+            uiGeoCoordLabel.setText("Coordonnées saisies");
+        } else {
+            uiGeoCoordLabel.setText("Coordonnées calculées");
+        }
+    }
+
     @Override
     public String getTitle() {
         return "Coordonnée";
     }
 
-    public List<Node> getExtraButton(){
+    public List<Node> getExtraButton() {
         return Collections.singletonList(uiImport);
     }
 
@@ -262,43 +308,65 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
             }
         }
 
-        uiLongitudeStart.getValueFactory().setValue(startPoint == null ? null : startPoint.getX());
-        uiLatitudeStart.getValueFactory().setValue(startPoint == null ? null : startPoint.getY());
-        uiLongitudeEnd.getValueFactory().setValue(endPoint == null ? null : endPoint.getX());
-        uiLatitudeEnd.getValueFactory().setValue(endPoint == null ? null : endPoint.getY());
+        if (startPoint != null) {
+            uiLongitudeStart.getValueFactory().setValue(startPoint.getX());
+             uiLatitudeStart.getValueFactory().setValue(startPoint.getY());
+        } else {
+            uiLongitudeStart.getValueFactory().setValue(null);
+             uiLatitudeStart.getValueFactory().setValue(null);
+
+        }
+
+        if (endPoint != null) {
+            uiLongitudeEnd.getValueFactory().setValue(endPoint.getX());
+             uiLatitudeEnd.getValueFactory().setValue(endPoint.getY());
+        } else {
+            uiLongitudeEnd.getValueFactory().setValue(null);
+             uiLatitudeEnd.getValueFactory().setValue(null);
+        }
 
         reseting = false;
     }
 
     @Override
-    public void buildGeometry(){
+    public void buildGeometry() {
 
         final Positionable positionable = posProperty.get();
 
         // On ne met la géométrie à jour depuis ce panneau que si on est dans son mode.
-        if(!getID().equals(positionable.getGeometryMode())) return;
+        if (!getID().equals(positionable.getGeometryMode())) {
+            return;
+        }
 
         // Si un CRS est défini, on essaye de récupérer les positions géographiques depuis le formulaire.
         final CoordinateReferenceSystem crs = uiCRSs.getValue();
-        if(crs==null) return;
+        if (crs == null) {
+            return;
+        }
 
         Point startPoint = null;
         Point endPoint = null;
-        if(uiLongitudeStart.getValue()!=null && uiLatitudeStart.getValue()!=null){
+        if (uiLongitudeStart.getValue() != null && uiLatitudeStart.getValue() != null) {
             startPoint = GO2Utilities.JTS_FACTORY.createPoint(new Coordinate(
                     uiLongitudeStart.getValue(), uiLatitudeStart.getValue()));
             JTS.setCRS(startPoint, crs);
         }
 
-        if(uiLongitudeEnd.getValue()!=null && uiLatitudeEnd.getValue()!=null){
+        if (uiLongitudeEnd.getValue() != null && uiLatitudeEnd.getValue() != null) {
             endPoint = GO2Utilities.JTS_FACTORY.createPoint(new Coordinate(
                     uiLongitudeEnd.getValue(), uiLatitudeEnd.getValue()));
             JTS.setCRS(endPoint, crs);
         }
 
-        if(startPoint==null && endPoint==null) return;
-        if(startPoint==null) startPoint = endPoint;
-        if(endPoint==null) endPoint = startPoint;
+        if (startPoint == null && endPoint == null) {
+            return;
+        }
+        if (startPoint == null) {
+            startPoint = endPoint;
+        }
+        if (endPoint == null) {
+            endPoint = startPoint;
+        }
 
         //on sauvegarde les points dans le crs de la base
         if (!Utilities.equalsIgnoreMetadata(crs, baseCrs)) {
@@ -307,13 +375,13 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
                 startPoint = (Point) JTS.transform(startPoint, trs);
                 endPoint = (Point) JTS.transform(endPoint, trs);
 
-            } catch(FactoryException | MismatchedDimensionException | TransformException ex) {
+            } catch (FactoryException | MismatchedDimensionException | TransformException ex) {
                 GeotkFX.newExceptionDialog("La conversion des positions a échouée.", ex).show();
                 throw new RuntimeException("La conversion des positions a échouée.", ex);
             }
         }
 
-        final TronconDigue troncon = FXPositionableMode.getTronconFromPositionable(positionable);
+        final TronconDigue troncon = ConvertPositionableCoordinates.getTronconFromPositionable(positionable);
         LineString geometry = LinearReferencingUtilities.buildGeometryFromGeo(troncon.getGeometry(), startPoint, endPoint);
 
         /* SYM-1658 : If user has inverted start and end point, we must try to
@@ -340,15 +408,25 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
         positionable.setPositionFin(endPoint);
         positionable.geometryModeProperty().set(getID());
         positionable.setGeometry(geometry);
+
+        ConvertPositionableCoordinates.computePositionableLinearCoordinate(positionable);
+
     }
 
     protected void coordChange() {
-        if(reseting) return;
+        if (reseting) {
+            return;
+        }
         reseting = true;
-        buildGeometry();
-        reseting = false;
+        try {
+            buildGeometry();
+            posProperty.get().setEditedGeoCoordinate(Boolean.TRUE);
+        } catch (Exception e) {
+            SIRS.LOGGER.log(Level.WARNING, "Echec de la construction de la géométrie lors du changement de coordonnées.", e);
+        } finally {
+            reseting = false;
+        }
     }
-
 
     /**
      * Update geographic/projected coordinate fields when current CRS change.
@@ -360,7 +438,9 @@ public abstract class FXPositionableAbstractCoordMode extends BorderPane impleme
      */
     private void crsChange(ObservableValue<? extends CoordinateReferenceSystem> observable,
             CoordinateReferenceSystem oldValue, CoordinateReferenceSystem newValue) {
-        if(reseting) return;
+        if (reseting) {
+            return;
+        }
 
         // There's no available null value in CRS combobox, so old value will be
         // null only at first allocation, no transform needed in this case.

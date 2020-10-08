@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -47,6 +47,7 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import org.apache.sis.util.ArgumentChecks;
@@ -103,7 +104,7 @@ public class Previews extends CouchDbRepositorySupport<Preview> implements Docum
     }
 
     @Override
-    public Preview get(String id) {
+    public Preview get(final String id) {
         ArgumentChecks.ensureNonNull("Element ID", id);
         final ViewQuery viewQuery = createQuery(BY_ID).includeDocs(false).key(id);
         final List<Preview> usages = db.queryView(viewQuery, Preview.class);
@@ -119,6 +120,28 @@ public class Previews extends CouchDbRepositorySupport<Preview> implements Docum
         ArgumentChecks.ensureNonNull("Class", ids);
         final ViewQuery viewQuery = createQuery(BY_ID).includeDocs(false).keys(Arrays.asList(ids));
         return db.queryView(viewQuery, Preview.class);
+    }
+
+    public List<Preview> getByclassAndIds(final Class clazz, final List<String> ids) {
+        ArgumentChecks.ensureNonNull("Element ids", ids);
+        ArgumentChecks.ensureStrictlyPositive("Ids number", ids.size());
+        ArgumentChecks.ensureNonNull("Class", clazz);
+
+        final ViewQuery viewQuery = createQuery(BY_ID).includeDocs(false).keys(ids);
+        final List<Preview> result = db.queryView(viewQuery, Preview.class);
+
+        return result == null ? result : result.stream()
+                .filter(p -> isPreviewOfClass(p, clazz))
+                .collect(Collectors.toList());
+    }
+
+    private boolean isPreviewOfClass(final Preview preview, final Class clazz) {
+        try {
+            return (preview.getElementClass() != null) && (Class.forName(preview.getElementClass()).isAssignableFrom(clazz));
+
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
     }
 
     @Override
@@ -258,7 +281,7 @@ public class Previews extends CouchDbRepositorySupport<Preview> implements Docum
             for (final Element e : entry.getValue()) {
                 tmpPreviews.add(createPreview(e));
             }
-            
+
             Platform.runLater(() -> previews.addAll(tmpPreviews));
         }
     }

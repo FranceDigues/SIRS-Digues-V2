@@ -40,20 +40,24 @@ import java.beans.IntrospectionException;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javafx.beans.property.*;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -62,12 +66,13 @@ import org.apache.sis.util.ArgumentChecks;
 import org.geotoolkit.data.FeatureCollection;
 import org.geotoolkit.data.FeatureIterator;
 import org.geotoolkit.data.FeatureStore;
-import org.geotoolkit.data.query.Query;
 import org.geotoolkit.data.query.QueryBuilder;
 import org.geotoolkit.db.JDBCFeatureStore;
 import org.geotoolkit.feature.Feature;
+import org.geotoolkit.feature.Property;
 import org.geotoolkit.util.NamesExt;
 import org.odftoolkit.simple.TextDocument;
+import org.opengis.feature.FeatureType;
 
 @JsonIgnoreProperties(ignoreUnknown=true)
 @JsonInclude(Include.NON_EMPTY)
@@ -352,124 +357,200 @@ public abstract class AbstractSectionRapport implements Element , AvecLibelle {
         /**
          * Names of the properties which should be used to print input elements.
          */
-        protected final LinkedHashSet<String> propertyNames;
+        protected final List<String> propertyNames;
+        
         /**
          * Filtered list of elements which should be printed. Can be null.
          */
         public final Stream<? extends Element> elements;
 
         /**
-         * Features which have been used for element filtering. Can be null.
+         * Résultat de requête sur la base SQL utilisé pour le filtrage des éléments. Can be null.
          */
-        protected final FeatureCollection filterValues;
+        protected final FeatureCollection queryResult;
 
-        public PrintContext(TextDocument target, Stream<? extends Element> elements) throws SQLException, DataStoreException, InterruptedException, ExecutionException, IOException {
+        /**
+         * 
+         * @param target
+         * @param elements
+         * @throws SQLException
+         * @throws DataStoreException
+         * @throws InterruptedException
+         * @throws ExecutionException
+         * @throws IOException 
+         */
+        public PrintContext(final TextDocument target, final Stream<? extends Element> elements) 
+                throws SQLException, DataStoreException, InterruptedException, ExecutionException, IOException {
             ArgumentChecks.ensureNonNull("Target document", target);
             this.target = target;
 
-            Optional<SQLQuery> sqlQuery = SQLQueries.findQuery(getRequeteId());
+            final Optional<SQLQuery> sqlQuery = SQLQueries.findQuery(getRequeteId());
+            
             if (!sqlQuery.isPresent()) {
                 propertyNames = null;
                 this.elements = elements;
-                filterValues = null;
+                queryResult = null;
 
-            } else {
-                final SessionCore session = InjectorCore.getBean(SessionCore.class);
-                final Query query = QueryBuilder.language(JDBCFeatureStore.CUSTOM_SQL,
+            } 
+            
+            // si une requête est présente
+            else {
+
+                // A- récupération des résultats de la requête
+                //============================================
+                final FeatureStore h2Store = InjectorCore.getBean(SessionCore.class).getH2Helper().getStore().get();
+                queryResult = h2Store.createSession(false).getFeatureCollection(
+                        QueryBuilder.language(JDBCFeatureStore.CUSTOM_SQL,
                         sqlQuery.get().getSql(),
                         NamesExt.create("query")
-                );
+                ));
 
-                // Retrieve properties returned by input query.
-                final FeatureStore h2Store = session.getH2Helper().getStore().get();
-                filterValues = h2Store.createSession(false).getFeatureCollection(query);
-
-                try (FeatureIterator reader = filterValues.iterator()) {
-                    if (!reader.hasNext()) {
-                        throw new IllegalStateException("Input query has no result. Elements cannot be filtered.");
+                // B- détermination des noms de colonnes
+                //======================================
+                try (final FeatureIterator reader = queryResult.iterator()) {
+                    if (reader.hasNext()) {
+                        propertyNames = propertyNames(reader.next().getType());
                     }
-
-                    Feature next = reader.next();
-                    propertyNames = new LinkedHashSet<>(next.getType().getProperties(true).stream()
-                            .map(pType -> pType.getName().tip().toString())
-                            .collect(Collectors.toList())
-                    );
+                    else {
+                        // SYM-1741 : en l'absence de résultat de la requête, on ne souhaite pas lancer d'exception mais poursuivre l'impression 
+                        propertyNames = null;
+                    }
                 }
 
+                // C- filtrage des éléments
+                //=========================
                 if (elements == null) {
+                    // S'il n'y a aucun élément, il n'y a pas de filtrage à faire
                     this.elements = null;
-
-                } else {
+                } 
+                
+                // à ce stade les noms de propriété sont null si et seulement si la requête ne retourne aucun résultat
+                // SYM-1741 : en l'absence de résultat de la requête, on ne souhaite pas lancer d'exception mais poursuivre l'impression 
+                else if(propertyNames==null){
+                    this.elements = Stream.empty();
+                }
+                else {
+                    
+                    // sinon, il faut déterminer le prédicat à utiliser pour filtrer les éléments
                     final Predicate<Element> predicate;
+                    
                     // Analyze input filter to determine if we only need ID comparison, or if we must perform a full scan.
                     if (propertyNames.contains(SirsCore.ID_FIELD)) {
-                        final HashSet<String> ids = new HashSet<>();
-                        try (FeatureIterator reader = filterValues.iterator()) {
+                        
+                        /*
+                        CAS 1 :
+                        S'il y a un identifiant dans les propriétés de la requête, le prédicat de filtrage utilisé
+                        consistera à tester si l'identifiant de chaque élément est présent dans comme valeur d'identifiant
+                        d'un des résultats de la requête.
+                        */
+                        
+                        // 1- recherche des valeurs des identifiants des résultats de la requête 
+                        final Set<String> queryResultIds = new HashSet<>();
+                        try (final FeatureIterator reader = queryResult.iterator()) {
                             while (reader.hasNext()) {
-                                final Object pValue = reader.next().getPropertyValue(SirsCore.ID_FIELD);
-                                if (pValue instanceof String) {
-                                    ids.add((String) pValue);
+                                final Object queryEntryId = reader.next().getPropertyValue(SirsCore.ID_FIELD);
+                                if (queryEntryId instanceof String) {
+                                    queryResultIds.add((String) queryEntryId);
                                 }
                             }
                         }
 
-                        predicate = input -> ids.contains(input.getId());
+                        // 2- définition du prédicat
+                        predicate = element -> queryResultIds.contains(element.getId());
 
-                    } else {
-                        final HashMap<String, HashMap<String, PropertyDescriptor>> classProperties = new HashMap<>();
-                        predicate = input -> {
-                            // Get list of input element properties.
-                            final String className = input.getClass().getCanonicalName();
-                            HashMap<String, PropertyDescriptor> properties = classProperties.get(className);
-                            if (properties == null) {
+                    } 
+                    else {
+                        
+                        /*
+                        CAS 2 :
+                        S'il n'y a pas d'identifiant dans les propriétés de la requête
+                        Dans ce cas, on ne veut garder que les éléments pour lesquels il existe un résultat de requête 
+                        ayant les mêmes propriétés.
+                        
+                        L'élément est éliminé, en particulier, si :
+                        - si un problème est rencontré lors de l'introspection des propriétés de sa classe
+                        - si l'élément ne dispose pas de toutes les propriétés existant pour les résultats de recherche
+                        - s'il n'existe aucun tuple du résultat de requête ayant toutes ses champs comparables aux champs de l'élément
+                        du point de vue du nom et de la valeur.
+                        */
+                        
+                        // index des accesseurs par classe et par nom de propritété de la feature correspondante
+                        // cet index est défini hors du prédicat pour éviter les répétitions de calculs pour une même classe d'éléments
+                        final Map<Class, Map<String, Method>> classProperties = new HashMap<>();
+                        predicate = element -> {
+                            
+                            // 1- recherche des accesseurs aux propriétés de l'élément
+                            final Class className = element.getClass();
+                            Map<String, Method> eltProperties = classProperties.get(className);
+                            
+                            if (eltProperties == null) {
                                 final PropertyDescriptor[] descriptors;
                                 try {
-                                    descriptors = Introspector.getBeanInfo(input.getClass()).getPropertyDescriptors();
+                                    descriptors = Introspector.getBeanInfo(element.getClass()).getPropertyDescriptors();
                                 } catch (IntrospectionException ex) {
-                                    SirsCore.LOGGER.log(Level.WARNING, "Invalid class : " + className, ex);
+                                    SirsCore.LOGGER.log(Level.WARNING, "Invalid class : " + className.getCanonicalName(), ex);
                                     return false;
                                 }
-                                properties = new HashMap<>(descriptors.length);
+                                
+                                eltProperties = new HashMap<>(descriptors.length);
                                 for (final PropertyDescriptor desc : descriptors) {
-                                    if (desc.getReadMethod() != null) {
-                                        desc.getReadMethod().setAccessible(true);
-                                        properties.put(desc.getName(), desc);
+                                    final Method readMethod = desc.getReadMethod();
+                                    if (readMethod != null) {
+                                        readMethod.setAccessible(true);
+                                        eltProperties.put(desc.getName(), readMethod);
                                     }
                                 }
-                                classProperties.put(className, properties);
+                                classProperties.put(className, eltProperties);
                             }
 
                             /* Now we can compare our element to filtered data. 2 steps :
                              * - Ensure our input element has at least all the properties of the filtered features
                              * - Ensure equality of all these properties with one of our filtered features.
                              */
-                            final HashMap<String, Object> values = new HashMap<>(propertyNames.size());
+                            
+                            // 2- récupération des valeurs des propriétés de l'élément
+                            final Map<String, Object> values = new HashMap<>(propertyNames.size());
                             for (final String pName : propertyNames) {
-                                final PropertyDescriptor desc = properties.get(pName);
-                                if (desc == null) {
+                                
+                                /*
+                                On recherche un accesseur à une propritété qui porte le même nom qu'un champ de la requête
+                                - s'il y a au moins une propriété pour laquelle on n'en trouve pas, le prédicat ne retient pas l'élément
+                                - si au contraire toutes les propriétés des résultats de requêtes sont retrouvées dans l'élément, 
+                                on lit les valeurs et on les indexe par le nom de la propritété
+                                */
+                                final Method readMethod = eltProperties.get(pName);
+                                if (readMethod == null) {
                                     return false;
                                 } else {
                                     try {
-                                        values.put(pName, desc.getReadMethod().invoke(input));
+                                        values.put(pName, readMethod.invoke(element));
                                     } catch (Exception ex) {
                                         throw new SirsCoreRuntimeException(ex);
                                     }
                                 }
                             }
 
+                            // 3- rejet des éléments pour lesquels il n'existe pas de résultat de requête ayant les mêmes
+                            // valeurs aux propriétés correspondantes
                             boolean isEqual;
-                            try (final FeatureIterator reader = filterValues.iterator()) {
+                            try (final FeatureIterator reader = queryResult.iterator()) {
+                                
+                                // parcours des résultats de la requête
                                 while (reader.hasNext()) {
                                     isEqual = true;
+                                    
+                                    // parcours des champs du tuple courant
                                     final Feature next = reader.next();
-                                    for (final org.geotoolkit.feature.Property p : next.getProperties()) {
+                                    for (final Property p : next.getProperties()) {
+                                        // dès qu'on trouve une propriété dont la valeur n'est pas égale à la valeur correspondante de l'élément, on rejette l'élément
                                         if (!propertiesEqual(p.getValue(), values.get(p.getName().tip().toString()))) {
                                             isEqual = false;
                                             break;
                                         }
                                     }
-                                    if (isEqual)
+                                    if (isEqual) {
                                         return true;
+                                    }
                                 }
                             }
 
@@ -481,31 +562,28 @@ public abstract class AbstractSectionRapport implements Element , AvecLibelle {
                 }
             }
         }
+    }
 
-        /**
-         * Tells if a given property should be ignored when building report.
-         * @param propertyName Name of the property to test.
-         * @return True if given property should be ignored, false otherwise
-         */
-        public boolean ignoreProperty(final String propertyName) {
-            return (propertyNames != null && propertyNames.contains(propertyName));
+    /**
+     * Test equality of input objects. It has been designed to manage numeric
+     * properties with different precision.
+     * @param p1 The first object to test
+     * @param p2 The second object to test
+     * @return True if input properties are equal, false otherwise.
+     */
+    private static boolean propertiesEqual(final Object p1, final Object p2) {
+        if (p1 instanceof Double && p2 instanceof Float
+                || p1 instanceof Float && p2 instanceof Double) {
+            return ((Number)p1).floatValue() == ((Number)p2).floatValue();
+        } else {
+            return Objects.equals(p1, p2);
         }
-
-        /**
-         * Test equality of input objects. It has been designed to manage numeric
-         * properties with different precision.
-         * @param p1 The first object to test
-         * @param p2 The second object to test
-         * @return True if input properties are equal, false otherwise.
-         */
-        private boolean propertiesEqual(final Object p1, final Object p2) {
-            if (p1 instanceof Double && p2 instanceof Float
-                    || p1 instanceof Float && p2 instanceof Double) {
-                return ((Number)p1).floatValue() == ((Number)p2).floatValue();
-            } else {
-                return Objects.equals(p1, p2);
-            }
-        }
+    }
+    
+    public static List<String> propertyNames(FeatureType featureType){
+        return featureType.getProperties(true).stream()
+                .map(p -> p.getName().tip().toString())
+                .collect(Collectors.toList());
     }
 }
 

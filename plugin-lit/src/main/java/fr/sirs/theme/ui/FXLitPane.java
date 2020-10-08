@@ -22,8 +22,10 @@ import static fr.sirs.CorePlugin.initTronconDigue;
 import fr.sirs.Injector;
 import fr.sirs.Session;
 import fr.sirs.core.component.TronconLitRepository;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.Lit;
 import fr.sirs.core.model.TronconLit;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -40,7 +42,7 @@ public class FXLitPane extends FXLitPaneStub {
 
     @FXML protected VBox contentBox;
 
-    private final TronconLitPojoTable table = new TronconLitPojoTable();
+    private final TronconLitPojoTable table;
 
     /**
      * Constructor. Initialize part of the UI which will not require update when
@@ -49,6 +51,7 @@ public class FXLitPane extends FXLitPaneStub {
     protected FXLitPane() {
         super();
         Injector.injectDependencies(this);
+        this.table = new TronconLitPojoTable(elementProperty());
         table.parentElementProperty().bind(elementProperty);
         contentBox.getChildren().add(table);
     }
@@ -75,8 +78,8 @@ public class FXLitPane extends FXLitPaneStub {
 
     private class TronconLitPojoTable extends PojoTable {
 
-        public TronconLitPojoTable() {
-            super(TronconLit.class, "Tronçon du lit");
+        public TronconLitPojoTable(final ObjectProperty<? extends Element> container) {
+            super(TronconLit.class, "Tronçon du lit", container);
             editableProperty().unbind();
             editableProperty().set(false);
         }

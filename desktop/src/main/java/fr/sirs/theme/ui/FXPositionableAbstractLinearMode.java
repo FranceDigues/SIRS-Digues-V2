@@ -19,8 +19,6 @@
 package fr.sirs.theme.ui;
 
 import com.vividsolutions.jts.geom.Geometry;
-import com.vividsolutions.jts.geom.LineString;
-import com.vividsolutions.jts.geom.Point;
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
 import fr.sirs.core.LinearReferencingUtilities;
@@ -32,6 +30,7 @@ import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.SystemeReperage;
 import fr.sirs.core.model.SystemeReperageBorne;
 import fr.sirs.core.model.TronconDigue;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import fr.sirs.util.FormattedDoubleConverter;
 import fr.sirs.util.SirsStringConverter;
 import java.text.DecimalFormat;
@@ -40,6 +39,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -51,6 +51,7 @@ import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.Node;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
@@ -71,20 +72,35 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
     protected final BooleanProperty disableProperty = new SimpleBooleanProperty(true);
     protected LinearReferencing.SegmentInfo[] tronconSegments;
 
-    @FXML protected ComboBox<SystemeReperage> uiSRs;
-    @FXML protected ComboBox<BorneDigue> uiBorneStart;
-    @FXML protected ComboBox<BorneDigue> uiBorneEnd;
-    @FXML protected RadioButton uiAvalStart;
-    @FXML protected RadioButton uiAvalEnd;
-    @FXML protected RadioButton uiAmontStart;
-    @FXML protected RadioButton uiAmontEnd;
-    @FXML protected Spinner<Double> uiDistanceStart;
-    @FXML protected Spinner<Double> uiDistanceEnd;
+    @FXML
+    protected ComboBox<SystemeReperage> uiSRs;
+    @FXML
+    protected ComboBox<BorneDigue> uiBorneStart;
+    @FXML
+    protected ComboBox<BorneDigue> uiBorneEnd;
+    @FXML
+    protected RadioButton uiAvalStart;
+    @FXML
+    protected RadioButton uiAvalEnd;
+    @FXML
+    protected RadioButton uiAmontStart;
+    @FXML
+    protected RadioButton uiAmontEnd;
+    @FXML
+    protected Spinner<Double> uiDistanceStart;
+    @FXML
+    protected Spinner<Double> uiDistanceEnd;
 
+    //Indicatif de la coordonnée saisie/calculée.    
+    @FXML
+    protected Label uiLinearCoordLabel;
+    
     private boolean reseting = false;
-    public boolean isReseting(){return reseting;}
-    public void setReseting(final boolean res){reseting = res;}
 
+    public void setReseting(boolean reseting) {
+        this.reseting = reseting;
+    }
+    
     public FXPositionableAbstractLinearMode() {
         SIRS.loadFXML(this, Positionable.class);
 
@@ -126,35 +142,44 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
          *
          * Jira task : SYM-1133
          */
-        final StringConverter conv= new FormattedDoubleConverter(new DecimalFormat("#.###"));
-        SpinnerValueFactory.DoubleSpinnerValueFactory valueFactory = new SpinnerValueFactory.DoubleSpinnerValueFactory(0, Double.MAX_VALUE, 0,1);
+        final StringConverter conv = new FormattedDoubleConverter(new DecimalFormat("#.###"));
+        SpinnerValueFactory.DoubleSpinnerValueFactory valueFactory = new SpinnerValueFactory.DoubleSpinnerValueFactory(0, Double.MAX_VALUE, 0, 1);
         valueFactory.setConverter(conv);
         uiDistanceStart.setValueFactory(valueFactory);
 
-        valueFactory = new SpinnerValueFactory.DoubleSpinnerValueFactory(0, Double.MAX_VALUE, 0,1);
+        valueFactory = new SpinnerValueFactory.DoubleSpinnerValueFactory(0, Double.MAX_VALUE, 0, 1);
         valueFactory.setConverter(conv);
         uiDistanceEnd.setValueFactory(valueFactory);
-
 
         final ChangeListener<Geometry> geomListener = new ChangeListener<Geometry>() {
             @Override
             public void changed(ObservableValue<? extends Geometry> observable, Geometry oldValue, Geometry newValue) {
-                if(reseting) return;
-                if(newValue==null){
+                if (reseting) {
+                    return;
+                }
+                if (newValue == null) {
                     throw new IllegalArgumentException("New geometry is null");
                 }
                 updateFields();
             }
         };
 
+        //Listener permettant d'indiquer si les coordonnées sont calculées ou éditées
+        final ChangeListener<Boolean> updateEditedGeoCoordinatesDisplay = (ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
+            setCoordinatesLabel(oldValue, newValue);
+        };
+        
         posProperty.addListener(new ChangeListener<Positionable>() {
             @Override
             public void changed(ObservableValue<? extends Positionable> observable, Positionable oldValue, Positionable newValue) {
-                if(oldValue!=null){
+                if (oldValue != null) {
                     oldValue.geometryProperty().removeListener(geomListener);
+                    oldValue.editedGeoCoordinateProperty().removeListener(updateEditedGeoCoordinatesDisplay);
                 }
-                if(newValue!=null){
+                if (newValue != null) {
                     newValue.geometryProperty().addListener(geomListener);
+                    newValue.editedGeoCoordinateProperty().addListener(updateEditedGeoCoordinatesDisplay);
+                    setCoordinatesLabel(null, posProperty.get().getEditedGeoCoordinate());
                     updateFields();
                 }
             }
@@ -169,6 +194,29 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
         uiBorneEnd.valueProperty().addListener(chgListener);
         uiDistanceStart.valueProperty().addListener(chgListener);
         uiDistanceEnd.valueProperty().addListener(chgListener);
+    }
+    
+    /**
+     * Méthode permettant de mettre à jour le label (FXML) indiquant si les
+     * coordonnées du mode ont été calculées ou éditées.
+     *
+     * @param oldEditedGeoCoordinate ancienne valeur de la propriété
+     * editedGeoCoordinate du positionable courant. Null si ont l'ignore.
+     * @param newEditedGeoCoordinate nouvelle valeur.
+     */
+    final protected void setCoordinatesLabel(Boolean oldEditedGeoCoordinate, Boolean newEditedGeoCoordinate){
+       if (newEditedGeoCoordinate == null) {
+                uiLinearCoordLabel.setText("Le mode d'obtention du type de coordonnées n'est pas renseigné.");
+                return;
+            } else if ((oldEditedGeoCoordinate!=null) && (oldEditedGeoCoordinate.equals(newEditedGeoCoordinate))) {
+                return;
+            }
+
+            if (newEditedGeoCoordinate) {
+                uiLinearCoordLabel.setText("Coordonnées calculées");
+            } else {
+                uiLinearCoordLabel.setText("Coordonnées saisies");
+            }
     }
 
     @Override
@@ -192,17 +240,17 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
     }
 
     /**
-     * Cette méthode ne doit s'occuper que de mettre à jour les champs et non
-     * de la mise à jour de l'information géométrique du positionable.
+     * Cette méthode ne doit s'occuper que de mettre à jour les champs et non de
+     * la mise à jour de l'information géométrique du positionable.
      */
     @Override
-    public void updateFields(){
+    public void updateFields() {
         reseting = true;
         try {
             final Positionable pos = posProperty.get();
             final String mode = pos.getGeometryMode();
 
-            final TronconDigue t = FXPositionableMode.getTronconFromPositionable(pos);
+            final TronconDigue t = ConvertPositionableCoordinates.getTronconFromPositionable(pos);
             final SystemeReperageRepository srRepo = (SystemeReperageRepository) Injector.getSession().getRepositoryForClass(SystemeReperage.class);
             final SystemeReperage defaultSR;
             boolean sameSR = false;
@@ -278,17 +326,17 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
      * @param defaultSR
      * @return
      */
-    protected Map<String,BorneDigue> initSRBorneLists(final TronconDigue t, final SystemeReperage defaultSR){
+    protected Map<String, BorneDigue> initSRBorneLists(final TronconDigue t, final SystemeReperage defaultSR) {
         final List<SystemeReperage> srs = ((SystemeReperageRepository) Injector.getSession().getRepositoryForClass(SystemeReperage.class)).getByLinear(t);
         uiSRs.setItems(SIRS.observableList(srs));
         uiSRs.getSelectionModel().select(defaultSR);
 
         // Init list of bornes
-        final Map<String,BorneDigue> borneMap = new HashMap<>();
+        final Map<String, BorneDigue> borneMap = new HashMap<>();
         ObservableList<BorneDigue> bornes = FXCollections.observableArrayList();
         if (defaultSR != null) {
             final AbstractSIRSRepository<BorneDigue> borneRepo = Injector.getSession().getRepositoryForClass(BorneDigue.class);
-            for(SystemeReperageBorne srb : defaultSR.systemeReperageBornes){
+            for (SystemeReperageBorne srb : defaultSR.systemeReperageBornes) {
                 borneMap.put(srb.getBorneId(), borneRepo.get(srb.getBorneId()));
             }
             bornes.addAll(borneMap.values());
@@ -305,51 +353,49 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
      * géométrique du positionable et non de la mise à jour des champs.
      */
     @Override
-    public void buildGeometry(){
+    public void buildGeometry() {
         //sauvegarde des propriétés
         final Positionable positionable = posProperty.get();
 
         // On ne met la géométrie à jour depuis ce panneau que si on est dans son mode.
-        if(!getID().equals(positionable.getGeometryMode())) return;
+        if (!getID().equals(positionable.getGeometryMode())) {
+            return;
+        }
 
         final SystemeReperage sr = uiSRs.getValue();
         final BorneDigue startBorne = uiBorneStart.getValue();
         final BorneDigue endBorne = uiBorneEnd.getValue();
-        positionable.setSystemeRepId(sr==null ? null : sr.getDocumentId());
-        positionable.setBorneDebutId(startBorne==null ? null : startBorne.getDocumentId());
-        positionable.setBorneFinId(endBorne==null ? null : endBorne.getDocumentId());
+        positionable.setSystemeRepId(sr == null ? null : sr.getDocumentId());
+        positionable.setBorneDebutId(startBorne == null ? null : startBorne.getDocumentId());
+        positionable.setBorneFinId(endBorne == null ? null : endBorne.getDocumentId());
         positionable.setBorne_debut_aval(uiAmontStart.isSelected());
         positionable.setBorne_fin_aval(uiAmontEnd.isSelected());
         positionable.setBorne_debut_distance(uiDistanceStart.getValue());
         positionable.setBorne_fin_distance(uiDistanceEnd.getValue());
 
-        //on recalcule la geometrie uniquement si on peut la dédduire des bornes.
-        if (startBorne != null || endBorne != null) {
-            final TronconDigue troncon = FXPositionableMode.getTronconFromPositionable(positionable);
-            final AbstractSIRSRepository<BorneDigue> borneRepo = Injector.getSession().getRepositoryForClass(BorneDigue.class);
-            final LineString geometry = LinearReferencingUtilities.buildGeometryFromBorne(troncon.getGeometry(), positionable, borneRepo);
-
-            //sauvegarde de la geometrie
-            positionable.geometryProperty().set(geometry);
-
-            positionable.setPositionDebut(geometry.getStartPoint());
-            positionable.setPositionFin(geometry.getEndPoint());
-        }
+        //on recalcule la geométrie et les coordonnées Géo du positionable.
+        ConvertPositionableCoordinates.computePositionableGeometryAndCoord(positionable);
     }
 
-    protected void coordChange(){
-        if(reseting) return;
+    protected void coordChange() {
+        if (reseting) {return;}
         reseting = true;
         try {
             buildGeometry();
-        } finally {
+            posProperty.get().setEditedGeoCoordinate(Boolean.FALSE);
+        }catch(Exception e){
+            SIRS.LOGGER.log(Level.WARNING, "Echec de la construction de la géométrie lors du changement de coordonnées.", e);
+        }finally {
+            updateFields();
             reseting = false;
         }
     }
 
     protected void srsChange(ObservableValue<? extends SystemeReperage> observable,
             SystemeReperage oldValue, SystemeReperage newSR) {
-        if(reseting) return;
+        if (reseting) {
+            return;
+        }
 
         reseting = true;
         try {
@@ -368,32 +414,32 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
             uiBorneEnd.setItems(observableBornes);
 
             //calcul de la position relative dans le nouveau SR
-                try {
-                    //on calcule les valeurs en fonction des points de debut et fin
-                    final TronconUtils.PosInfo ps = new TronconUtils.PosInfo(positionableProperty().get());
-                    final TronconUtils.PosSR rp = ps.getForSR(newSR);
+            try {
+                //on calcule les valeurs en fonction des points de debut et fin
+                final TronconUtils.PosInfo ps = new TronconUtils.PosInfo(positionableProperty().get());
+                final TronconUtils.PosSR rp = ps.getForSR(newSR);
 
-                    uiAvalStart.setSelected(!rp.startAval);
-                    uiAmontStart.setSelected(rp.startAval);
-                    uiDistanceStart.getValueFactory().setValue(rp.distanceStartBorne);
-                    uiBorneStart.getSelectionModel().select(rp.borneDigueStart);
+                uiAvalStart.setSelected(!rp.startAval);
+                uiAmontStart.setSelected(rp.startAval);
+                uiDistanceStart.getValueFactory().setValue(rp.distanceStartBorne);
+                uiBorneStart.getSelectionModel().select(rp.borneDigueStart);
 
-                    uiAvalEnd.setSelected(!rp.endAval);
-                    uiAmontEnd.setSelected(rp.endAval);
-                    uiDistanceEnd.getValueFactory().setValue(rp.distanceEndBorne);
-                    uiBorneEnd.getSelectionModel().select(rp.borneDigueEnd);
-                } catch (Exception e) {
-                    //pas de geometrie
-                    uiAvalStart.setSelected(true);
-                    uiAmontStart.setSelected(false);
-                    uiDistanceStart.getValueFactory().setValue(0.0);
-                    uiBorneStart.getSelectionModel().clearSelection();
+                uiAvalEnd.setSelected(!rp.endAval);
+                uiAmontEnd.setSelected(rp.endAval);
+                uiDistanceEnd.getValueFactory().setValue(rp.distanceEndBorne);
+                uiBorneEnd.getSelectionModel().select(rp.borneDigueEnd);
+            } catch (Exception e) {
+                //pas de geometrie
+                uiAvalStart.setSelected(true);
+                uiAmontStart.setSelected(false);
+                uiDistanceStart.getValueFactory().setValue(0.0);
+                uiBorneStart.getSelectionModel().clearSelection();
 
-                    uiAvalEnd.setSelected(true);
-                    uiAmontEnd.setSelected(false);
-                    uiDistanceEnd.getValueFactory().setValue(0.0);
-                    uiBorneEnd.getSelectionModel().clearSelection();
-                }
+                uiAvalEnd.setSelected(true);
+                uiAmontEnd.setSelected(false);
+                uiDistanceEnd.getValueFactory().setValue(0.0);
+                uiBorneEnd.getSelectionModel().clearSelection();
+            }
 
             buildGeometry();
         } finally {
@@ -402,7 +448,9 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
     }
 
     /**
-     * Return the Linear geometry on which the input {@link SystemeReperage} is based on.
+     * Return the Linear geometry on which the input {@link SystemeReperage} is
+     * based on.
+     *
      * @param source The SR to get linear for. If null, we'll try to get tronçon
      * geometry of the currently edited {@link Positionable}.
      * @return The linear associated, or null if we cannot get it.
@@ -410,38 +458,10 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
     protected LinearReferencing.SegmentInfo[] getSourceLinear(final SystemeReperage source) {
         if (tronconSegments == null) {
             final Positionable positionable = posProperty.get();
-            final TronconDigue t = FXPositionableMode.getTronconFromPositionable(positionable);
+            final TronconDigue t = ConvertPositionableCoordinates.getTronconFromPositionable(positionable);
             tronconSegments = LinearReferencingUtilities.getSourceLinear(t, source);
         }
         return tronconSegments;
-    }
-
-    /**
-     * Compute current positionable point using linear referencing information
-     * defined in the form. Returned point is expressed with Database CRS.
-     *
-     * @param distance
-     * @param borneProperty
-     * @param amont
-     * @return The point computed from starting borne. If we cannot, we return null.
-     */
-    protected Point computeGeoFromLinear(final Number distance,
-            final BorneDigue borneProperty, final boolean amont) {
-
-        final Positionable positionable = posProperty.get();
-        final TronconDigue t = FXPositionableMode.getTronconFromPositionable(positionable);
-
-        if (distance != null && borneProperty != null && t != null) {
-            //calcul à partir des bornes
-            final Point bornePoint = borneProperty.getGeometry();
-            double dist = distance.doubleValue();
-            if (amont) {
-                dist *= -1;
-            }
-            return LinearReferencingUtilities.computeCoordinate(t.getGeometry(), bornePoint, dist, 0);
-        } else {
-            return null;
-        }
     }
 
     private static class BorneComparator implements Comparator<BorneDigue> {
@@ -449,7 +469,7 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
         @Override
         public int compare(BorneDigue o1, BorneDigue o2) {
             if (o1 == null) {
-                return o2 == null? 0 : 1;
+                return o2 == null ? 0 : 1;
             }
 
             if (o1.getLibelle() == null) {
@@ -457,11 +477,17 @@ public abstract class FXPositionableAbstractLinearMode extends BorderPane implem
                     if (o1.getDesignation() == null) {
                         if (o2.getDesignation() == null) {
                             return 0;
-                        } else return 1;
+                        } else {
+                            return 1;
+                        }
                     } else if (o2.getDesignation() == null) {
                         return -1;
-                    } else return o1.getDesignation().compareTo(o2.getDesignation());
-                } else return 1;
+                    } else {
+                        return o1.getDesignation().compareTo(o2.getDesignation());
+                    }
+                } else {
+                    return 1;
+                }
             }
 
             return o1.getLibelle().compareTo(o2.getLibelle());

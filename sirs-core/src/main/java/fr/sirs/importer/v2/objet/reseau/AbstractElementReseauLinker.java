@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -84,6 +84,7 @@ public abstract class AbstractElementReseauLinker implements Linker<ObjetReseau,
     @Autowired
     protected SessionCore session;
 
+    @Override
     public void link() throws AccessDbImporterException, IOException {
 
         Iterator<Row> iterator = context.inputDb.getTable(tableName).iterator();

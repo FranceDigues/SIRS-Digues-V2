@@ -27,8 +27,10 @@ import fr.sirs.core.model.AvecDateMaj;
 import fr.sirs.core.model.AvecForeignParent;
 import fr.sirs.core.model.Element;
 import fr.sirs.core.model.Identifiable;
+import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.ReferenceType;
 import fr.sirs.util.ClosingDaemon;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import fr.sirs.util.StreamingIterable;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.WeakReference;
@@ -41,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
-import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.ObservableList;
 import org.apache.sis.util.ArgumentChecks;
 import org.apache.sis.util.collection.Cache;
@@ -160,6 +161,9 @@ public abstract class AbstractSIRSRepository<T extends Identifiable> extends Cou
     private void checkIntegrity(T entity){
         if(entity instanceof AvecForeignParent){
             if(((AvecForeignParent) entity).getForeignParentId()==null) throw new IllegalArgumentException("L'élément ne peut être enregistré sans élement parent.");
+        }
+        if(entity instanceof Positionable) {
+            ConvertPositionableCoordinates.COMPUTE_MISSING_COORD.test((Positionable) entity);
         }
     }
 
@@ -436,12 +440,12 @@ public abstract class AbstractSIRSRepository<T extends Identifiable> extends Cou
      * View is query on first {@link #hasNext()} call, to avoid keeping useless
      * connections opened.
      *
-     * Note : Thiss implementation is not thread-safe.
+     * Note : This implementation is not thread-safe.
      */
     private class StreamingViewIterator implements CloseableIterator<T> {
 
         private final ViewQuery query;
-        private final SimpleObjectProperty<StreamingViewResult> result = new SimpleObjectProperty<>();
+        private StreamingViewResult result;
         private Iterator<ViewResult.Row> iterator;
 
         // Will be created only if we can effectively iterate on results.
@@ -459,11 +463,14 @@ public abstract class AbstractSIRSRepository<T extends Identifiable> extends Cou
             // No element cached, we analyze input stream
             if (next == null) {
                 // Open connection on first call.
-                if (result.get() == null) {
-                    final StreamingViewResult viewResult = db.queryForStreamingView(query);
-                    result.set(viewResult);
-                    if (viewResult.getTotalRows() > 0) {
-                        this.iterator = viewResult.iterator();
+                if (result == null) {
+                    try{
+                    result = db.queryForStreamingView(query);
+                    } catch (Exception e) {
+                        SirsCore.LOGGER.log(Level.WARNING, "Ektorp Streaming iterator failed retrieving next view element !.", e);
+                    }
+                    if (result.getTotalRows() > 0) {
+                        this.iterator = result.iterator();
                         objectReader = new ObjectMapper().reader(type);
                     } else {
                         this.iterator = null;
@@ -518,9 +525,9 @@ public abstract class AbstractSIRSRepository<T extends Identifiable> extends Cou
         public void close() {
             try {
                 iterator = null;
-                if (result.get() != null) {
-                    result.get().close();
-                    result.set(null);
+                if (result != null) {
+                    result.close();
+                    result = null;
                 }
             } catch (Exception e) {
                 SirsCore.LOGGER.log(Level.WARNING, "A streamed CouchDB view result cannot be closed. It's likely to cause memory leaks.", e);

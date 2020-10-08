@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -20,6 +20,7 @@ package fr.sirs.plugin.reglementaire.ui;
 
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
+import fr.sirs.core.component.EtapeObligationReglementaireRepository;
 import fr.sirs.core.component.ObligationReglementaireRepository;
 import fr.sirs.core.component.RefEcheanceRappelObligationReglementaireRepository;
 import fr.sirs.core.component.RefEtapeObligationReglementaireRepository;
@@ -45,6 +46,7 @@ import org.geotoolkit.font.FontAwesomeIcons;
 import org.geotoolkit.font.IconBuilder;
 
 import java.time.LocalDate;
+import java.util.logging.Level;
 
 /**
  * Vue calendrier présentant les évènements construits à partir des obligations réglementaires.
@@ -136,12 +138,25 @@ public final class ObligationsCalendarView extends CalendarView {
             final RefEcheanceRappelObligationReglementaireRepository rerorr = Injector.getBean(RefEcheanceRappelObligationReglementaireRepository.class);
             final RefEtapeObligationReglementaireRepository reorr = Injector.getBean(RefEtapeObligationReglementaireRepository.class);
             final RefTypeObligationReglementaireRepository rtorr = Injector.getBean(RefTypeObligationReglementaireRepository.class);
+            EtapeObligationReglementaireRepository erRepo = null;
 
+            ObligationReglementaire obligation = null;
             for (final EtapeObligationReglementaire etape : etapes) {
-                if (etape.getObligationReglementaireId() == null) {
+                if ((etape == null)||(etape.getObligationReglementaireId() == null) ) {
                     continue;
                 }
-                final ObligationReglementaire obligation = orr.get(etape.getObligationReglementaireId());
+                try {
+                    obligation = orr.get(etape.getObligationReglementaireId());
+                } catch (Exception e) {
+                    SIRS.LOGGER.log(Level.WARNING, "Echec lors du chargement de l''obligation r\u00e9glementaire associ\u00e9e \u00e0 l''\u00e9tape : {0}\n{1}", new Object[]{etape.getDesignation(), e.getMessage()});
+                    etape.setValid(false);
+                    etape.setObligationReglementaireId(null);
+                    if (erRepo == null) {
+                        erRepo = Injector.getBean(EtapeObligationReglementaireRepository.class);
+                    }
+                    erRepo.update(etape);
+                    continue;
+                }
                 if (obligation == null) {
                     continue;
                 }

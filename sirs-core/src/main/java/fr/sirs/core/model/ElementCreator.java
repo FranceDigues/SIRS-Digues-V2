@@ -90,7 +90,7 @@ public class ElementCreator {
             constructor.setAccessible(true);
             final T element = constructor.newInstance();
 
-            element.setValid(!ownableSession.needValidationProperty().get());
+            element.setValid(ownableSession.createValidDocuments().get());
             final Utilisateur utilisateur = ownableSession.getUtilisateur();
             if (ownableSession.getUtilisateur() != null) {
                 element.setAuthor(utilisateur.getId());
@@ -98,9 +98,22 @@ public class ElementCreator {
 
             if (tryAutoIncrement) {
                 // Determine an auto-incremented value for designation
-                tryAutoIncrement(element.getClass()).ifPresent(t -> {
+                tryAutoIncrementDesignation(element);
+            }
+
+            return element;
+
+        } catch (NoSuchMethodException | SecurityException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
+            throw new SirsCoreRuntimeException(ex.getMessage());
+        }
+    }
+
+    public <T extends Element> void tryAutoIncrementDesignation(final T element){
+
+        tryAutoIncrement(element.getClass()).ifPresent(t -> {
                     TaskManager.INSTANCE.submit(t);
                     try {
+                        //TODO : change strategy to release the FX thread. (t.get() is blocking!).
                         final Integer value = t.get();
                         if (value != null) {
                             element.setDesignation(value.toString());
@@ -113,13 +126,6 @@ public class ElementCreator {
                         SirsCore.LOGGER.log(Level.WARNING, "Cannot compute auto-increment value", ex);
                     }
                 });
-            }
-
-            return element;
-
-        } catch (NoSuchMethodException | SecurityException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
-            throw new SirsCoreRuntimeException(ex.getMessage());
-        }
     }
 
     /**

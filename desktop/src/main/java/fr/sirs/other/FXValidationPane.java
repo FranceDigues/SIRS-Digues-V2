@@ -33,11 +33,16 @@ import fr.sirs.core.SirsCore;
 import static fr.sirs.core.SirsCore.INFO_DOCUMENT_ID;
 import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.component.Previews;
+import fr.sirs.core.component.TronconDigueRepository;
 import fr.sirs.core.model.Element;
+import fr.sirs.core.model.Objet;
 import fr.sirs.core.model.Preview;
+import fr.sirs.core.model.SQLQuery;
+import fr.sirs.core.model.TronconDigue;
 import fr.sirs.core.model.Utilisateur;
 import fr.sirs.util.FXPreviewToElementTableColumn;
 import fr.sirs.util.ReferenceTableCell;
+import fr.sirs.util.SirsStringConverter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -66,6 +71,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.util.StringConverter;
+import org.apache.sis.util.ArgumentChecks;
 import org.geotoolkit.gui.javafx.util.ButtonTableCell;
 import org.geotoolkit.gui.javafx.util.TaskManager;
 import org.geotoolkit.internal.GeotkFX;
@@ -81,7 +87,11 @@ public class FXValidationPane extends BorderPane {
     private final Previews repository = session.getPreviews();
     private final ChoiceBox<Choice> choiceBox = new ChoiceBox<>(FXCollections.observableArrayList(Choice.values()));
 
-    private List<Preview> previews;
+
+    final TronconDigueRepository tronconRepository = (TronconDigueRepository) session.getRepositoryForClass(TronconDigue.class);
+    final  SirsStringConverter converter = new SirsStringConverter();
+
+//    private List<Preview> previews;
     private final Map<String, ResourceBundle> bundles = new HashMap<>();
 
     private static enum Choice {
@@ -180,6 +190,7 @@ public class FXValidationPane extends BorderPane {
             });
         table.getColumns().add(labelColumn);
 
+        // Colonne de l'auteur.
         final TableColumn<Preview, String> authorColumn = new TableColumn<>(previewBundle.getString(PREVIEW_BUNDLE_KEY_AUTHOR));
         authorColumn.setCellValueFactory((TableColumn.CellDataFeatures<Preview, String> param) -> {
                 return new SimpleObjectProperty(param.getValue().getAuthor());
@@ -187,11 +198,25 @@ public class FXValidationPane extends BorderPane {
         authorColumn.setCellFactory((TableColumn<Preview, String> param) -> new ReferenceTableCell(Utilisateur.class));
         table.getColumns().add(authorColumn);
 
+        // SYM-1941 : Ajout Colonne tronçon
+        final TableColumn<Preview, String> tronconColumn = new TableColumn<>("Tronçon - document : designation");
+        tronconColumn.setCellValueFactory((TableColumn.CellDataFeatures<Preview, String> param) -> {
+            return new SimpleObjectProperty(tryFindTronconFromPreview(param.getValue()));
+        });
+        tronconColumn.setEditable(false);
+        table.getColumns().add(tronconColumn);
+
+
         table.getColumns().add(new ValidColumn());
 
         setCenter(table);
 
-        table.setItems(FXCollections.observableArrayList(repository.getAllByValidationState(false)));
+        final List<Preview> allByValidationState = repository.getAllByValidationState(false);
+
+        // retrait de la liste des éléments pour lesquels la validation n'a pas d'importance (SYM-1767)
+        allByValidationState.removeIf(p -> SQLQuery.class.getCanonicalName().equals(p.getElementClass()));
+
+        table.setItems(FXCollections.observableArrayList(allByValidationState));
 
         choiceBox.setConverter(new StringConverter<Choice>() {
 
@@ -228,14 +253,50 @@ public class FXValidationPane extends BorderPane {
         setTop(hBox);
     }
 
+    private String tryFindTronconFromPreview( final Preview preview) {
+        String result;
+        final Class elementClass;
+//            final Class elementClass = preview.getJavaClassOr(Object.class);
+
+        try {
+
+            final StringBuilder resultBuilder = new StringBuilder();
+            final String className = preview.getDocClass();
+            elementClass = Class.forName(className);
+            if (Objet.class.isAssignableFrom(elementClass)) {
+
+                final Objet objet = ((Objet) session.getRepositoryForClass(elementClass)
+                        .get(preview.getDocId()));
+
+                resultBuilder.append(converter.toString(tronconRepository.get(objet.getLinearId()))).append(" - ");
+
+                if(objet.getDesignation() !=null) {
+                    resultBuilder.append(getBundleForClass(className).getString(BUNDLE_KEY_CLASS)).append (" : ").append(objet.getDesignation());
+                }
+                result =resultBuilder.toString();
+            } else {
+                SIRS.LOGGER.log(Level.INFO, "Impossible d'identifi\u00e9 un tron\u00e7on pour les \u00e9l\u00e9ments de type : {0}", elementClass.getCanonicalName());
+                result = "";
+            }
+
+//                return tronconRepository.get();
+        } catch (Exception e) {
+            SIRS.LOGGER.log(Level.INFO, "Exception - Impossible d'identifi\u00e9 un tron\u00e7on pour l'\u00e9l\u00e9ment {0} de type : {1}", new Object[]{preview.getDocId(), preview.getDocClass()});
+            result = "";
+        }
+        return result;
+    }
+
     private void fillTable(){
         final List<Preview> requiredList;
         switch(choiceBox.getSelectionModel().getSelectedItem()){
             case VALID: requiredList = repository.getAllByValidationState(true); break;
             case INVALID: requiredList = repository.getAllByValidationState(false); break;
             case ALL:
-            default: requiredList= repository.getValidation();
+            default: requiredList = repository.getValidation();
         }
+        // retrait de la liste des éléments pour lesquels la validation n'a pas d'importance (SYM-)
+        requiredList.removeIf(p -> SQLQuery.class.getCanonicalName().equals(p.getElementClass()));
         table.setItems(FXCollections.observableArrayList(requiredList));
     }
 
@@ -274,8 +335,8 @@ public class FXValidationPane extends BorderPane {
                                 final AbstractSIRSRepository repo = session.getRepositoryForType(vSummary.getDocClass());
                                 final Element docu = (Element) repo.get(vSummary.getDocId() == null ? vSummary.getElementId() : vSummary.getDocId());
 
-                                // Si l'elementid est null, c'est que l'élément est le document lui-même
-                                if (vSummary.getElementId() == null) {
+                                if (vSummary.getElementId() == null || vSummary.getElementId().equals(vSummary.getDocId())) {
+                                    // Si l'elementid est null, c'est que l'élément est le document lui-même
                                     if(!docu.getValid()){
                                         final Alert confirm = new Alert(Alert.AlertType.CONFIRMATION, "Supprimer l'élément ?", ButtonType.NO, ButtonType.YES);
                                         confirm.setResizable(true);
@@ -284,13 +345,14 @@ public class FXValidationPane extends BorderPane {
                                             repo.remove(docu);
                                             table.getItems().remove(vSummary);
                                         }
-                                    }else{
+                                    } else {
                                         final Alert alert = new Alert(Alert.AlertType.INFORMATION, "Vous ne pouvez supprimer que les éléments invalides.", ButtonType.OK);
                                         alert.setResizable(true);
                                         alert.showAndWait();
                                     }
-                                } // Sinon, c'est que l'élément est inclus quelque part dans le document et il faut le rechercher.
+                                }
                                 else {
+                                    // Sinon, c'est que l'élément est inclus quelque part dans le document et il faut le rechercher.
                                     final Element elt = docu.getChildById(vSummary.getElementId());
                                     if(!elt.getValid()){
                                         final Alert confirm = new Alert(Alert.AlertType.CONFIRMATION, "Supprimer l'élément ?", ButtonType.NO, ButtonType.YES);
@@ -301,7 +363,7 @@ public class FXValidationPane extends BorderPane {
                                             repo.update(docu);
                                             table.getItems().remove(vSummary);
                                         }
-                                    } else{
+                                    } else {
                                         final Alert alert = new Alert(Alert.AlertType.INFORMATION, "Vous ne pouvez supprimer que les éléments invalides.", ButtonType.OK);
                                         alert.setResizable(true);
                                         alert.showAndWait();

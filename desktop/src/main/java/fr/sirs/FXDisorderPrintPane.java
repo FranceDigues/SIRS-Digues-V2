@@ -21,8 +21,10 @@ package fr.sirs;
 import fr.sirs.core.SirsCore;
 import fr.sirs.core.model.Desordre;
 import fr.sirs.core.model.Observation;
+import fr.sirs.core.model.Positionable;
 import fr.sirs.core.model.RefTypeDesordre;
 import fr.sirs.core.model.RefUrgence;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import fr.sirs.ui.Growl;
 import fr.sirs.util.ClosingDaemon;
 import java.util.Comparator;
@@ -137,6 +139,7 @@ public class FXDisorderPrintPane extends TemporalTronconChoicePrintPane {
         uiOptionFin.valueProperty().addListener(parameterListener);
         uiOptionDebutArchive.valueProperty().addListener(parameterListener);
         uiOptionFinArchive.valueProperty().addListener(parameterListener);
+        uiPrestationPredicater.uiOptionPrestation.selectedProperty().addListener(parameterListener);
 
         uiCountProgress.setVisible(false);
         updateCount(null);
@@ -178,11 +181,13 @@ public class FXDisorderPrintPane extends TemporalTronconChoicePrintPane {
 
     private Stream<Desordre> getData() {
         final Predicate userOptions = new TypePredicate()
+                .and(Desordre::getValid) // On n'autorise à l'impression uniquement les désordre valides.
                 .and(new TemporalPredicate())
                 .and(new LinearPredicate<>())
                 // /!\ It's important that pr filtering is done AFTER linear filtering.
                 .and(new PRPredicate<>())
-                .and(new UrgencePredicate());
+                .and(new UrgencePredicate())
+                .and(uiPrestationPredicater.getPredicate());
 
         final CloseableIterator<Desordre> it = Injector.getSession()
                 .getRepositoryForClass(Desordre.class)
@@ -191,7 +196,8 @@ public class FXDisorderPrintPane extends TemporalTronconChoicePrintPane {
 
         final Spliterator<Desordre> split = Spliterators.spliteratorUnknownSize(it, 0);
         final Stream dataStream = StreamSupport.stream(split, false)
-                .filter(userOptions);
+                .filter(userOptions)
+                .peek(p -> ConvertPositionableCoordinates.COMPUTE_MISSING_COORD.test((Positionable) p));
 
         dataStream.onClose(() -> it.close());
         ClosingDaemon.watchResource(dataStream, it);
@@ -211,15 +217,16 @@ public class FXDisorderPrintPane extends TemporalTronconChoicePrintPane {
         });
 
         uiCountProgress.visibleProperty().bind(t.runningProperty());
-        t.setOnRunning(evt -> Platform.runLater(() -> {
-            uiCountLabel.setText(null);
-        }));
 
-        t.setOnSucceeded(evt -> Platform.runLater(() -> {
-            uiCountLabel.setText(String.valueOf(t.getValue()));
-        }));
-
-        t.setOnFailed(evt -> Platform.runLater(() -> {
+        /*
+        * t.setOnSucceeded(evt -> Platform.runLater(() -> {
+        *   uiCountLabel.setText(String.valueOf(t.getValue()));
+        * }));
+        * Platform.runLater ne semble pas nécessaire d'où :
+        */
+        t.setOnRunning(  evt -> uiCountLabel.setText(null));
+        t.setOnSucceeded(evt -> uiCountLabel.setText(String.valueOf(t.getValue())));
+        t.setOnFailed(   evt -> Platform.runLater(() -> {
             new Growl(Growl.Type.ERROR, "Impossible de déterminer le nombre de désordres à imprimer.").showAndFade();
         }));
 
@@ -246,6 +253,11 @@ public class FXDisorderPrintPane extends TemporalTronconChoicePrintPane {
         public boolean test(Desordre t) {
             return acceptedIds.isEmpty() || (t.getTypeDesordreId() != null && acceptedIds.contains(t.getTypeDesordreId()));
         }
+    }
+
+    @Override
+    protected InvalidationListener getParameterListener() {
+        return parameterListener;
     }
 
     /**

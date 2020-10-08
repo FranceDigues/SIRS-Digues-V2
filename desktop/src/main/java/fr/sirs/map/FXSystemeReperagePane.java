@@ -22,11 +22,9 @@ import com.vividsolutions.jts.geom.LineString;
 import com.vividsolutions.jts.geom.Point;
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
-import fr.sirs.Session;
 import fr.sirs.core.InjectorCore;
 import fr.sirs.core.LinearReferencingUtilities;
 import static fr.sirs.core.LinearReferencingUtilities.asLineString;
-import fr.sirs.core.SessionCore;
 import fr.sirs.core.SirsCore;
 import static fr.sirs.core.SirsCore.SR_ELEMENTAIRE;
 import fr.sirs.core.TronconUtils;
@@ -37,6 +35,9 @@ import fr.sirs.core.model.BorneDigue;
 import fr.sirs.core.model.SystemeReperageBorne;
 import fr.sirs.core.model.SystemeReperage;
 import fr.sirs.core.model.TronconDigue;
+import static fr.sirs.map.EditModeObjet.CREATE_OBJET;
+import static fr.sirs.map.EditModeObjet.EDIT_OBJET;
+import static fr.sirs.map.EditModeObjet.PICK_TRONCON;
 import fr.sirs.util.LabelComparator;
 import fr.sirs.util.SimpleButtonColumn;
 import fr.sirs.util.SirsStringConverter;
@@ -52,10 +53,8 @@ import javafx.beans.binding.Bindings;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.binding.ObjectBinding;
 import javafx.beans.property.ObjectProperty;
-import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
@@ -75,19 +74,15 @@ import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
-import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
-import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
-import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.cell.TextFieldListCell;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
@@ -97,47 +92,31 @@ import org.geotoolkit.display2d.GO2Utilities;
 import org.geotoolkit.gui.javafx.render2d.FXMap;
 import org.geotoolkit.gui.javafx.util.FXNumberCell;
 import org.geotoolkit.gui.javafx.util.FXTableCell;
-import org.geotoolkit.gui.javafx.util.FXTableView;
 import org.geotoolkit.gui.javafx.util.TaskManager;
 import org.geotoolkit.internal.GeotkFX;
 import org.geotoolkit.referencing.LinearReferencing;
 import org.geotoolkit.referencing.LinearReferencing.ProjectedPoint;
 import static org.geotoolkit.referencing.LinearReferencing.buildSegments;
 import static org.geotoolkit.referencing.LinearReferencing.projectReference;
-import org.geotoolkit.util.StringUtilities;
-
 /**
  *
  * @author Johann Sorel (Geomatys)
+ * @author Matthieu Bastianelli (Geomatys)
  */
-public class FXSystemeReperagePane extends BorderPane {
+public class FXSystemeReperagePane extends FXAbstractEditOnTronconPane {
 
-    public static enum Mode{
-        PICK_TRONCON,
-        EDIT_BORNE,
-        CREATE_BORNE,
-        NONE
-    };
 
-    @FXML private TextField uiTronconLabel;
-    @FXML private ToggleButton uiPickTroncon;
+
+    @FXML Button uiAddObjet;
     @FXML private ChoiceBox<SystemeReperage> uiSrComboBox;
     @FXML private CheckBox uiDefaultSRCheckBox;
     @FXML private Button uiAddSr;
     @FXML private Button uiDeleteSR;
-    @FXML private FXTableView<SystemeReperageBorne> uiBorneTable;
-    @FXML private Button uiAddBorne;
-    @FXML private ToggleButton uiCreateBorne;
-    @FXML private Button uiProject;
-    @FXML private Label typeNameLabel;
+    @FXML Button uiProject;
 
-    private final ObjectProperty<TronconDigue> tronconProp = new SimpleObjectProperty<>();
-    private final ObjectProperty<Mode> mode = new SimpleObjectProperty<>(Mode.NONE);
-    private final Session session;
-    private final FXMap map;
 
-    /** A flag to indicate that selected {@link TronconDigue} must be saved. */
-    private final SimpleBooleanProperty saveTD = new SimpleBooleanProperty(false);
+//    private final ObjectProperty<ObjetEditMode> mode = new SimpleObjectProperty<>(EditModeObjet.NONE);
+
     /** A flag to indicate that selected {@link SystemeReperage} must be saved. */
     private final SimpleBooleanProperty saveSR = new SimpleBooleanProperty(false);
 
@@ -148,13 +127,10 @@ public class FXSystemeReperagePane extends BorderPane {
     private final ObjectBinding<Comparator<SystemeReperageBorne>> defaultSRBComparator;
 
     public FXSystemeReperagePane(FXMap map, final String typeName) {
-        SIRS.loadFXML(this);
+        super(map, typeName, BorneDigue.class, false);
 
-        typeNameLabel.setText(StringUtilities.firstToUpper(typeName)+ " :");
-        this.map = map;
-        session = Injector.getSession();
+        uiObjetTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
-        uiPickTroncon.setGraphic(new ImageView(SIRS.ICON_CROSSHAIR_BLACK));
         uiAddSr.setGraphic(new ImageView(SIRS.ICON_ADD_BLACK));
         uiDeleteSR.setGraphic(new ImageView(GeotkFX.ICON_DELETE));
         uiProject.setDisable(true);
@@ -167,109 +143,87 @@ public class FXSystemeReperagePane extends BorderPane {
 
         //on active la table et bouton de creation si un sr est sélectionné
         final BooleanBinding borneEditBinding = uiSrComboBox.valueProperty().isNull();
-        uiBorneTable.disableProperty().bind(borneEditBinding);
-        uiAddBorne.disableProperty().bind(borneEditBinding);
-        uiCreateBorne.disableProperty().bind(borneEditBinding);
+        uiObjetTable.disableProperty().bind(borneEditBinding);
+        uiAddObjet.disableProperty().bind(borneEditBinding);
+        uiCreateObjet.disableProperty().bind(borneEditBinding);
 
         //on active le calcule de PR uniquement si 2 bornes sont sélectionnées
-        uiBorneTable.setEditable(true);
-        uiBorneTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-        uiBorneTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<SystemeReperageBorne>() {
+
+        uiObjetTable.getSelectionModel().getSelectedItems().addListener(new ListChangeListener<SystemeReperageBorne>() {
             @Override
             public void onChanged(ListChangeListener.Change<? extends SystemeReperageBorne> c) {
-                final int size = uiBorneTable.getSelectionModel().getSelectedItems().size();
+                final int size = uiObjetTable.getSelectionModel().getSelectedItems().size();
                 uiProject.setDisable(size<1);
             }
         });
 
-        uiPickTroncon.setOnAction(this::startPickTroncon);
-        uiAddBorne.setOnAction(this::startAddBorne);
-        uiCreateBorne.setOnAction(this::startCreateBorne);
+        uiAddObjet.setOnAction(this::startAddObjet);
         uiAddSr.setOnAction(this::createSystemeReperage);
         uiDeleteSR.setOnAction(this::deleteSystemeReperage);
         uiProject.setOnAction(this::reprojectBorneToSection);
 
-        // Affichage du libellé du tronçon
-        uiTronconLabel.textProperty().bind(Bindings.createStringBinding(()->tronconProp.get()==null?"":tronconProp.get().getLibelle(),tronconProp));
-
-        //etat des boutons sélectionné
-        final ToggleGroup group = new ToggleGroup();
-        uiPickTroncon.setToggleGroup(group);
-        uiCreateBorne.setToggleGroup(group);
-
-        mode.addListener(new ChangeListener<Mode>() {
-            @Override
-            public void changed(ObservableValue<? extends Mode> observable, Mode oldValue, Mode newValue) {
-                if(newValue==Mode.CREATE_BORNE){
-                    group.selectToggle(uiCreateBorne);
-                }else if(newValue==Mode.PICK_TRONCON){
-                    group.selectToggle(uiPickTroncon);
-                }else{
-                    group.selectToggle(null);
-                }
-            }
-        });
-
-
         //colonne de la table
-        final TableColumn<SystemeReperageBorne,SystemeReperageBorne> deleteCol = new DeleteColumn();
-        final TableColumn<SystemeReperageBorne,SystemeReperageBorne> nameCol = new NameColumn();
-        final TableColumn<SystemeReperageBorne,Number> prCol = new PRColumn();
-        uiBorneTable.getColumns().add(deleteCol);
-        uiBorneTable.getColumns().add(nameCol);
-        uiBorneTable.getColumns().add(prCol);
-
-        nameCol.setSortable(true);
-        prCol.setSortable(true);
+        addColumToTable(new SRBDeleteColumn(), false);
+        addColumToTable(new SRBNameColumn(), true);
+        addColumToTable(new PRColumn(), true);
 
         // Initialize event listeners
-        tronconProp.addListener(this::tronconChanged);
         uiSrComboBox.valueProperty().addListener(this::updateBorneTable);
         uiSrComboBox.valueProperty().addListener(this::updateDefaultSRCheckBox);
         uiDefaultSRCheckBox.selectedProperty().addListener(this::updateTonconDefaultSR);
 
         // Update default comparator on linear change.
         defaultSRBComparator = Bindings.createObjectBinding(() -> {
-            final TronconDigue td = tronconProp.get();
+            final TronconDigue td = getTronconFromProperty();
             if (td == null || td.getGeometry() == null)
                 return null;
             return new SRBComparator(LinearReferencingUtilities.asLineString(td.getGeometry()));
         }, tronconProp);
+
+        //etat des boutons sélectionné
+        final ToggleGroup group = new ToggleGroup();
+        uiPickTroncon.setToggleGroup(group);
+        uiCreateObjet.setToggleGroup(group);
+
+        mode.addListener((observable, oldValue, newValue) -> {
+            switch ((EditModeObjet) newValue) {
+                case CREATE_OBJET:
+                    group.selectToggle(uiCreateObjet);
+                    break;
+                case PICK_TRONCON:
+                    group.selectToggle(uiPickTroncon);
+                    break;
+                default:
+                    group.selectToggle(null);
+                    break;
+            }
+        });
     }
 
+    @Override
     public void reset(){
-        mode.set(Mode.PICK_TRONCON);
+	super.reset();
         systemeReperageProperty().set(null);
-        tronconProperty().set(null);
     }
 
     public void selectSRB(SystemeReperageBorne srb){
-        final int index = uiBorneTable.getItems().indexOf(srb);
+        final int index = uiObjetTable.getItems().indexOf(srb);
         if(index>=0){
-            uiBorneTable.getSelectionModel().clearAndSelect(index);
+            uiObjetTable.getSelectionModel().clearAndSelect(index);
         }else{
-            uiBorneTable.getSelectionModel().clearSelection();
+            uiObjetTable.getSelectionModel().clearSelection();
         }
     }
 
-    public ReadOnlyObjectProperty<Mode> modeProperty(){
-        return mode;
-    }
-
-    public ObjectProperty<TronconDigue> tronconProperty(){
-        return tronconProp;
-    }
 
     public ObjectProperty<SystemeReperage> systemeReperageProperty(){
         return uiSrComboBox.valueProperty();
     }
 
-    public ObservableList<SystemeReperageBorne> borneProperties(){
-        return uiBorneTable.getSelectionModel().getSelectedItems();
-    }
 
+    @Override
     public void save() {
-        save(uiSrComboBox.getValue(), tronconProp.getValue());
+        save(uiSrComboBox.getValue(), getTronconFromProperty());
     }
 
     private void save(final SystemeReperage sr, final TronconDigue td) {
@@ -296,23 +250,22 @@ public class FXSystemeReperagePane extends BorderPane {
         }
     }
 
-    private void startPickTroncon(ActionEvent evt){
-        mode.set(Mode.PICK_TRONCON);
-    }
 
     /*
      * BORNE UTILITIES
      */
 
+
     /**
      * Constuit un composant graphique listant les bornes du tronçon.
-     * 
+     *
      * @param toExclude Liste des identifiants de bornes à exclure de la liste.
      * @return A list view of all bornes bound to currently selected troncon, or
      * null if no troncon is selected.
      */
-    private ListView<BorneDigue> buildBorneList(final Set<String> toExclude) {
-        final TronconDigue troncon = tronconProperty().get();
+    @Override
+    ListView buildObjetList(final Set toExclude) {
+        final TronconDigue troncon = getTronconFromProperty();
         if (troncon == null) return null;
 
         // Construction de la liste définitive des identifiants des bornes à afficher.
@@ -323,7 +276,7 @@ public class FXSystemeReperagePane extends BorderPane {
         } else {
             borneIds = troncon.getBorneIds();
         }
-        
+
         // Récupération et tri des bornes.
         final List<BorneDigue> bornes = session.getRepositoryForClass(BorneDigue.class).get(borneIds);
         bornes.sort((BorneDigue b1, BorneDigue b2) -> {
@@ -344,11 +297,11 @@ public class FXSystemeReperagePane extends BorderPane {
 
     /**
      * Ajout au SR d'une borne existante sur le tronçon.
-     * 
-     * @param evt 
+     *
+     * @param evt
      */
-    private void startAddBorne(ActionEvent evt){
-        final TronconDigue troncon = tronconProperty().get();
+    void startAddObjet(ActionEvent evt) {
+        final TronconDigue troncon = getTronconFromProperty();
         final SystemeReperage csr = systemeReperageProperty().get();
         if(csr==null || troncon==null) return;
 
@@ -357,15 +310,15 @@ public class FXSystemeReperagePane extends BorderPane {
         for (final SystemeReperageBorne srb : csr.systemeReperageBornes) {
             borneIdsAlreadyInSR.add(srb.getBorneId());
         }
-        
+
         // Construction et affichage du composant graphique de choix des bornes à ajouter.
-        final ListView<BorneDigue> bornesView = buildBorneList(borneIdsAlreadyInSR);
+        final ListView<BorneDigue> bornesView = buildObjetList(borneIdsAlreadyInSR);
         final Dialog dialog = new Dialog();
         final DialogPane pane = new DialogPane();
         pane.setContent(bornesView);
         pane.getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         dialog.setDialogPane(pane);
-        
+
         // Récupération des bornes sélectionnées et ajout dans le SR.
         final Object res = dialog.showAndWait().get();
         if(ButtonType.OK.equals(res)){
@@ -374,39 +327,29 @@ public class FXSystemeReperagePane extends BorderPane {
                 addBorneToSR(bd);
             }
         }
-
-    }
-
-    private void startCreateBorne(ActionEvent evt){
-        if(mode.get().equals(Mode.CREATE_BORNE)){
-            //on retourne on mode edition
-            mode.set(Mode.EDIT_BORNE);
-        }else{
-            mode.set(Mode.CREATE_BORNE);
-        }
     }
 
     /**
      * Projection des bornes sélectionnées, sur le tronçon.
-     * 
-     * @param evt 
+     *
+     * @param evt
      */
     private void reprojectBorneToSection(ActionEvent evt){
-        
+
         // Récupération du tronçon et du SR.
-        final TronconDigue troncon = tronconProp.get();
+        final TronconDigue troncon = getTronconFromProperty();
         final SystemeReperage sr = systemeReperageProperty().get();
         if(troncon==null || sr==null) return;
 
         final LineString linear = LinearReferencingUtilities.asLineString(troncon.getGeometry());
         final LinearReferencingUtilities.SegmentInfo[] segments = LinearReferencingUtilities.buildSegments(linear);
-        
+
         final AbstractSIRSRepository<BorneDigue> repo = session.getRepositoryForClass(BorneDigue.class);
-        
+
         // Parcours des bornes sélectionnées, projection de la géométrie sur la géométrie du tronçon et mise à jour de la borne en base.
-        final ObservableList<SystemeReperageBorne> lst = uiBorneTable.getSelectionModel().getSelectedItems();
+        final ObservableList<SystemeReperageBorne> lst = uiObjetTable.getSelectionModel().getSelectedItems();
         for(final SystemeReperageBorne srb : lst){
-            
+
             final BorneDigue borne = repo.get(srb.getBorneId());
             final Point point = borne.getGeometry();
 
@@ -416,12 +359,12 @@ public class FXSystemeReperagePane extends BorderPane {
             repo.update(borne);
         }
 
-        uiBorneTable.getSelectionModel().clearSelection();
+        uiObjetTable.getSelectionModel().clearSelection();
         map.getCanvas().repaint();
     }
 
     private void createSystemeReperage(ActionEvent evt){
-        final TronconDigue troncon = tronconProperty().get();
+        final TronconDigue troncon = getTronconFromProperty();
         if(troncon==null) return;
 
         final TextInputDialog dialog = new TextInputDialog("Nom du SR");
@@ -448,11 +391,12 @@ public class FXSystemeReperagePane extends BorderPane {
 
     /**
      * Création d'une borne à partir d'un point.
-     * 
-     * @param geom 
+     *
+     * @param geom
      */
-    public void createBorne(final Point geom){
-        
+//    @Override
+    public final void createObjet(final Point geom){
+
         // Formulaire de renseignement du libellé de la borne.
         final TextInputDialog dialog = new TextInputDialog("");
         dialog.getEditor().setPromptText("borne ...");
@@ -465,7 +409,7 @@ public class FXSystemeReperagePane extends BorderPane {
 
         //creation de la borne
         final String borneLbl = opt.get();
-        
+
         // On vérifie que le libellé renseigné pour la borne ne fait pas partie des libellés utilisés par le SR élémentaire.
         if(SirsCore.SR_ELEMENTAIRE_START_BORNE.equals(borneLbl) || SirsCore.SR_ELEMENTAIRE_END_BORNE.equals(borneLbl)){
             final Alert alert = new Alert(Alert.AlertType.ERROR, "Le libellé de borne \""+borneLbl+"\" est réservé au SR élémentaire.", ButtonType.CLOSE);
@@ -473,12 +417,12 @@ public class FXSystemeReperagePane extends BorderPane {
             alert.showAndWait();
             return;
         }
-        
+
         final BorneDigue borne = session.getRepositoryForClass(BorneDigue.class).create();
         borne.setLibelle(borneLbl);
         borne.setGeometry(geom);
         session.getRepositoryForClass(BorneDigue.class).add(borne);
-        final TronconDigue tr = tronconProp.get();
+        final TronconDigue tr = getTronconFromProperty();
         if (tr != null) {
             tr.getBorneIds().add(borne.getId());
         }
@@ -489,7 +433,7 @@ public class FXSystemeReperagePane extends BorderPane {
 
     /**
      * Ajout d'une borne au système de repérage.
-     * 
+     *
      * @param borne Borne à ajouter au système de repérage.
      */
     private void addBorneToSR(final BorneDigue borne) {
@@ -506,18 +450,18 @@ public class FXSystemeReperagePane extends BorderPane {
         //reference dans le SR
         final SystemeReperageBorne srb = Injector.getSession().getElementCreator().createElement(SystemeReperageBorne.class);
         srb.borneIdProperty().set(borne.getDocumentId());
-        
+
         // Si on est dans le SR élémentaire, il faut calculer le PR de la borne de manière automatique (SYM-1429).
-        if(tronconProp.get()!=null && SR_ELEMENTAIRE.equals(sr.getLibelle())){
-            final ProjectedPoint proj = projectReference(buildSegments(asLineString(tronconProp.get().getGeometry())), borne.getGeometry());
-            
+        if(getTronconFromProperty()!=null && SR_ELEMENTAIRE.equals(sr.getLibelle())){
+            final ProjectedPoint proj = projectReference(buildSegments(asLineString(getTronconFromProperty().getGeometry())), borne.getGeometry());
+
             // Pour obtenir le PR calculé dans le SR élémentaire, il faut ajouter le PR de la borne de départ à la distance du point projeté sur le linéaire.
-            srb.setValeurPR((float) proj.distanceAlongLinear + TronconUtils.getPRStart(tronconProp.get(), sr, session));
+            srb.setValeurPR((float) proj.distanceAlongLinear + TronconUtils.getPRStart(getTronconFromProperty(), sr, session));
         }
         else {
             srb.setValeurPR(0.f);
         }
-        
+
         //sauvegarde du SR
         saveSR.set(sr.systemeReperageBornes.add(srb));
     }
@@ -533,8 +477,9 @@ public class FXSystemeReperagePane extends BorderPane {
      * @param e Event fired when deletion button has been fired.
      */
     @FXML
-    private void deleteBornes(ActionEvent e) {
-        final ListView<BorneDigue> borneList = buildBorneList(null);
+    @Override
+    void deleteObjets(ActionEvent e) {
+        final ListView<BorneDigue> borneList = buildObjetList(null);
         if (borneList == null) return;
 
         final Stage stage = new Stage();
@@ -564,7 +509,7 @@ public class FXSystemeReperagePane extends BorderPane {
             final ButtonType userDecision = confirmation.showAndWait().orElse(ButtonType.NO);
             if (ButtonType.YES.equals(userDecision)) {
                 final BorneDigue[] selectedItems = borneList.getSelectionModel().getSelectedItems().toArray(new BorneDigue[0]);
-                if (checkBorneSuppression(selectedItems)) {
+                if (checkObjetSuppression(selectedItems)) {
                     final TaskManager.MockTask deletor = new TaskManager.MockTask("Suppression de bornes", () -> {
                         InjectorCore.getBean(BorneDigueRepository.class).remove(selectedItems);
                     });
@@ -588,7 +533,8 @@ public class FXSystemeReperagePane extends BorderPane {
      * @param bornes Bornes to delete.
      * @return True if we can proceed to borne deletion, false if not.
      */
-    public boolean checkBorneSuppression(final BorneDigue... bornes) {
+//    @Override
+    public boolean checkObjetSuppression(final BorneDigue... bornes) {
         final HashSet<String> borneIds = new HashSet<>();
         for (final BorneDigue bd : bornes) {
             borneIds.add(bd.getId());
@@ -623,7 +569,7 @@ public class FXSystemeReperagePane extends BorderPane {
      * @param evt
      */
     private void deleteSystemeReperage(ActionEvent evt) {
-        final TronconDigue troncon = tronconProperty().get();
+        final TronconDigue troncon = getTronconFromProperty();
         if(troncon==null) return;
 
         SystemeReperage toDelete = uiSrComboBox.getValue();
@@ -696,7 +642,8 @@ public class FXSystemeReperagePane extends BorderPane {
         }
     }
 
-    private void tronconChanged(ObservableValue<? extends TronconDigue> observable, TronconDigue oldValue, TronconDigue newValue) {
+    @Override
+    void tronconChanged(ObservableValue observable, TronconDigue oldValue, TronconDigue newValue) {
         if (oldValue != null) {
             save(uiSrComboBox.getValue(), oldValue);
         }
@@ -704,7 +651,7 @@ public class FXSystemeReperagePane extends BorderPane {
         if(newValue==null) {
             uiSrComboBox.setItems(FXCollections.emptyObservableList());
         } else {
-            mode.set(Mode.NONE);
+            mode.set(EditModeObjet.NONE);
             final List<SystemeReperage> srs = ((SystemeReperageRepository) session.getRepositoryForClass(SystemeReperage.class)).getByLinear(newValue);
             uiSrComboBox.setItems(FXCollections.observableArrayList(srs));
 
@@ -722,7 +669,7 @@ public class FXSystemeReperagePane extends BorderPane {
             newValue.systemeRepDefautIdProperty().addListener((ObservableValue<? extends String> srObservable, String oldSR, String newSR) -> {
                 uiDefaultSRCheckBox.setSelected(newSR == null? false : newSR.equals(uiSrComboBox.getValue() == null? null : uiSrComboBox.getValue().getId()));
             });
-            
+
             // On met à jour le SR élémentaire s'il esxiste.
             TronconUtils.updateSRElementaireIfExists(newValue, session);
         }
@@ -730,7 +677,7 @@ public class FXSystemeReperagePane extends BorderPane {
 
     private void updateDefaultSRCheckBox(ObservableValue<? extends SystemeReperage> observable, SystemeReperage oldValue, SystemeReperage newValue) {
         if (newValue != null && tronconProp.get() != null &&
-                newValue.getId().equals(tronconProp.get().getSystemeRepDefautId())) {
+                newValue.getId().equals(getTronconFromProperty().getSystemeRepDefautId())) {
             uiDefaultSRCheckBox.setSelected(true);
         } else {
             uiDefaultSRCheckBox.setSelected(false);
@@ -738,7 +685,7 @@ public class FXSystemeReperagePane extends BorderPane {
     }
 
     private void updateTonconDefaultSR(ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) {
-        TronconDigue td = tronconProp.get();
+        TronconDigue td = getTronconFromProperty();
         final SystemeReperage selectedSR = uiSrComboBox.getSelectionModel().getSelectedItem();
         final String srid = selectedSR == null? null : selectedSR.getId();
         if (td != null && srid != null) {
@@ -762,13 +709,13 @@ public class FXSystemeReperagePane extends BorderPane {
         }
 
         if (newValue == null) {
-            uiBorneTable.setItems(FXCollections.emptyObservableList());
+            uiObjetTable.setItems(FXCollections.emptyObservableList());
         } else {
-            final Mode current = mode.get();
-            if (current.equals(Mode.CREATE_BORNE) || current.equals(Mode.EDIT_BORNE)) {
+            final EditModeObjet current = getMode();
+            if (current.equals(EditModeObjet.CREATE_OBJET) || current.equals(EditModeObjet.EDIT_OBJET)) {
                 //do nothing
             } else {
-                mode.set(Mode.EDIT_BORNE);
+                mode.set(EditModeObjet.EDIT_OBJET);
             }
 
             // By default, we'll sort bornes from uphill to downhill, but alow user to sort them according to available table columns.
@@ -780,18 +727,18 @@ public class FXSystemeReperagePane extends BorderPane {
                 sortedItems = newValue.getSystemeReperageBornes().sorted();
             }
 
-            sortedItems.comparatorProperty().bind(uiBorneTable.comparatorProperty());
-            uiBorneTable.setItems(sortedItems);
+            sortedItems.comparatorProperty().bind(uiObjetTable.comparatorProperty());
+            uiObjetTable.setItems(sortedItems);
         }
     }
 
-    
+
     /**
      * Colonne de suppression d'une borne d'un système de repérage.
      */
-    private class DeleteColumn extends SimpleButtonColumn<SystemeReperageBorne, SystemeReperageBorne> {
+    private class SRBDeleteColumn extends SimpleButtonColumn<SystemeReperageBorne, SystemeReperageBorne> {
 
-        public DeleteColumn() {
+        SRBDeleteColumn() {
             super(GeotkFX.ICON_UNLINK,
                     (TableColumn.CellDataFeatures<SystemeReperageBorne, SystemeReperageBorne> param) -> new SimpleObjectProperty<>(param.getValue()),
                     (SystemeReperageBorne t) -> true,
@@ -813,13 +760,13 @@ public class FXSystemeReperagePane extends BorderPane {
         }
     }
 
-    
+
     /**
      * Colonne d'affichage et de mise à jour du nom d'une borne.
      */
-    private static class NameColumn extends TableColumn<SystemeReperageBorne,SystemeReperageBorne>{
+    private static class SRBNameColumn extends TableColumn<SystemeReperageBorne,SystemeReperageBorne>{
 
-        public NameColumn() {
+        public SRBNameColumn() {
             super("Nom");
             setSortable(false);
 
@@ -855,7 +802,7 @@ public class FXSystemeReperagePane extends BorderPane {
         }
     }
 
-    
+
     /**
      * Colonne d'affichage et de mise à jour du PR d'une borne dans un SR.
      */
@@ -882,48 +829,50 @@ public class FXSystemeReperagePane extends BorderPane {
 
             addEventHandler(TableColumn.editCommitEvent(), (TableColumn.CellEditEvent<SystemeReperageBorne, Object> event) -> {
                 final SystemeReperageBorne srb = event.getRowValue();
-                if (srb != null) {
-                    
+                final TronconDigue troncon = getTronconFromProperty();
+
+                if ((srb != null) && (troncon != null)) {
+
                     final float oldValue = srb.getValeurPR();
-                    
+
                     // On met à jour le PR de la borne modifiée dans le SR sélectionné.
                     srb.setValeurPR(((Number) event.getNewValue()).floatValue());
-                    
-                    // CAS PARTICULIER : 
+
+                    // CAS PARTICULIER :
                     // Dans le SR élémentaire, la valeur du PR équivaut à la distance depuis la borne de début et le calcul est automatique.
                     if(SR_ELEMENTAIRE.equals(systemeReperageProperty().get().getLibelle())){
-                        
+
                         // Récupération des informations de la borne.
                         final BorneDigue bd = Injector.getSession().getRepositoryForClass(BorneDigue.class).get(srb.getBorneId());
                         if(bd!=null){
                             // Les bornes de début et de fin sont spécifiques
                             if(SirsCore.SR_ELEMENTAIRE_START_BORNE.equals(bd.getLibelle())){
                                 /*
-                                On autorise la modification du PR de la borne de début car ce dernier sert d'offset pour 
-                                les PRs des autres bornes dans le SR élémentaire. Mais on ne déplace jamais la borne de 
+                                On autorise la modification du PR de la borne de début car ce dernier sert d'offset pour
+                                les PRs des autres bornes dans le SR élémentaire. Mais on ne déplace jamais la borne de
                                 début lorsque son PR est édité.
                                 En revanche, il faut mettre à jour les PRs de toutes les bornes dans ce SR.
-                                */
-                                final double offset = TronconUtils.getPRStart(tronconProp.get(), systemeReperageProperty().get(), session);
-                                final List<BorneDigue> tronconBornes = session.getRepositoryForClass(BorneDigue.class).get(tronconProp.get().getBorneIds());
-                                for(final SystemeReperageBorne currentSRB : systemeReperageProperty().get().getSystemeReperageBornes()){
-                                    for(final BorneDigue currentBorne : tronconBornes){
-                                        if(currentBorne.getId().equals(currentSRB.getBorneId())){
+                                 */
+                                final double offset = TronconUtils.getPRStart(troncon, systemeReperageProperty().get(), session);
+                                final List<BorneDigue> tronconBornes = session.getRepositoryForClass(BorneDigue.class).get(troncon.getBorneIds());
+                                for (final SystemeReperageBorne currentSRB : systemeReperageProperty().get().getSystemeReperageBornes()) {
+                                    for (final BorneDigue currentBorne : tronconBornes) {
+                                        if (currentBorne.getId().equals(currentSRB.getBorneId())) {
                                             // On met à jour les PRs de toutes les bornes du SR élémentaire, sauf celui de la borne de début.
-                                            if(!SirsCore.SR_ELEMENTAIRE_START_BORNE.equals(currentBorne.getLibelle())){
-                                                final ProjectedPoint proj = projectReference(buildSegments(asLineString(tronconProp.get().getGeometry())), currentBorne.getGeometry());
-                                                currentSRB.setValeurPR((float) (proj.distanceAlongLinear+offset));
+                                            if (!SirsCore.SR_ELEMENTAIRE_START_BORNE.equals(currentBorne.getLibelle())) {
+                                                final ProjectedPoint proj = projectReference(buildSegments(asLineString(getTronconFromProperty().getGeometry())), currentBorne.getGeometry());
+                                                currentSRB.setValeurPR((float) (proj.distanceAlongLinear + offset));
                                             }
                                             break;
                                         }
                                     }
                                 }
-                                
-                            }
-                            else if(SirsCore.SR_ELEMENTAIRE_END_BORNE.equals(bd.getLibelle())){
+
+
+                            } else if(SirsCore.SR_ELEMENTAIRE_END_BORNE.equals(bd.getLibelle())){
                                 /*
-                                On ne déplace jamais la borne de fin lorsque son PR est édité, mais de plus ce dernier 
-                                ne dépend pas de l'utilisateur, mais de la longueur du tronçon et du PR de la borne de 
+                                On ne déplace jamais la borne de fin lorsque son PR est édité, mais de plus ce dernier
+                                ne dépend pas de l'utilisateur, mais de la longueur du tronçon et du PR de la borne de
                                 début. On restaure donc la valeur calculée et on ignore la valeur modifiée.
                                 */
                                 Platform.runLater(()-> {
@@ -932,49 +881,49 @@ public class FXSystemeReperagePane extends BorderPane {
                                         + "\nde la géométrie du tronçon et du PR de \nla borne de début.", ButtonType.CLOSE);
                                     alert.setResizable(true);
                                     alert.showAndWait();
-                                    final double offset = TronconUtils.getPRStart(tronconProp.get(), systemeReperageProperty().get(), session);
-                                    srb.setValeurPR((float)(tronconProp.get().getGeometry().getLength()+offset));
+                                    final double offset = TronconUtils.getPRStart(troncon, systemeReperageProperty().get(), session);
+                                    srb.setValeurPR((float)(troncon.getGeometry().getLength()+offset));
                                 });
-                                
+
                             }
                             else {
                                 // Dans le cas général des autres bornes du SR élémentaire, on veut maintenir la position
                                 // de la borne sur le tronçon en cohérence avec son PR modifié.
-                                
+
                                 // On a besoin du PR de la borne de début.
-                                final double offset = TronconUtils.getPRStart(tronconProp.get(), systemeReperageProperty().get(), session);
-                                
+                                final double offset = TronconUtils.getPRStart(troncon, systemeReperageProperty().get(), session);
+
                                 /*
-                                On vérifie que le PR modifié d'une borne intermédiaire est bien inclus entre celui de la 
+                                On vérifie que le PR modifié d'une borne intermédiaire est bien inclus entre celui de la
                                 borne de début et celui de la borne de fin.
-                                
+
                                 Ce choix est dû au fait qu'une fois le PR d'une borne modifié dans le SR élémentaire, celle-ci
                                 est reprojetée sur le tronçon de manière à ce que sa position reste cohérente avec son PR.
-                                
+
                                 Le mécanisme de projection n'empêche pas de projeter un point en-deçà ni au-delà des
-                                extrémités du tronçon. : le point projeté est alors positionné dans le prolongement du 
+                                extrémités du tronçon. : le point projeté est alors positionné dans le prolongement du
                                 premier ou du dernier segment.
-                                
-                                Néanmoins, il se pose ensuite un problème de cohérence car le PR calculé de ces points 
+
+                                Néanmoins, il se pose ensuite un problème de cohérence car le PR calculé de ces points
                                 se base non pas sur leur position mais sur leur projection sur le tronçon qui sont respectivement
                                 les points de début et de fin.
-                                
-                                Ainsi, on pourrait provoquer des situations étranges pour l'utilisateur. Par exemple, sur 
-                                tronçon de 4000m dont les PRs des bornes de début et de fin seraient respectivement de 
+
+                                Ainsi, on pourrait provoquer des situations étranges pour l'utilisateur. Par exemple, sur
+                                tronçon de 4000m dont les PRs des bornes de début et de fin seraient respectivement de
                                 1500 et 1500+4000=5500.
-                                
+
                                 On peut créer une borne intermédiare dont le PR est 3000. Si on modifiait ensuite le PR de
                                 cette borne à 7000, elle irait se placer dans le prolongement du dernier segment du tronçon,
                                 au-delà de la fin de la géométrie.
-                                
+
                                 Mais à la première occasion à laquelle le PR de cette borne serait recalculé, sa valeur
                                 deviendrait alors 5500 (soit le PR de l'extrémité de fin).
-                                
+
                                 Il semble ainsi plus raisonable d'éviter ces incohérences en restreignant la modification
                                 du PR des bornes intermédiaires à des valeurs qui ne diffèreront pas des calculs automatiques
                                 ultérieurs.
                                 */
-                                if(srb.getValeurPR()<offset || srb.getValeurPR()>tronconProp.get().getGeometry().getLength()+offset){
+                                if(srb.getValeurPR()<offset || srb.getValeurPR()>troncon.getGeometry().getLength()+offset){
                                     Platform.runLater(()-> {
                                         final Alert alert = new Alert(Alert.AlertType.ERROR, "Le PR d'une borne intermédiaire\n"
                                                 + " dans le SR élémentaire doit obligatoirement\n être supérieur au PR de la borne de début\n"
@@ -985,19 +934,18 @@ public class FXSystemeReperagePane extends BorderPane {
                                     });
                                 }
                                 else {
-                                    final LinearReferencing.SegmentInfo[] buildSegments = buildSegments(asLineString(tronconProp.get().getGeometry()));
-                                    final Point computeCoordinate = LinearReferencingUtilities.computeCoordinate(buildSegments, 
+                                    final LinearReferencing.SegmentInfo[] buildSegments = buildSegments(asLineString(troncon.getGeometry()));
+                                    final Point computeCoordinate = LinearReferencingUtilities.computeCoordinate(buildSegments,
                                             GO2Utilities.JTS_FACTORY.createPoint(buildSegments[0].segmentCoords[0]), srb.getValeurPR()-offset, 0.);
                                         bd.setGeometry(computeCoordinate);
                                         Injector.getSession().getRepositoryForClass(BorneDigue.class).update(bd);
                                 }
                             }
+                        } else {
+                                throw new IllegalStateException("Aucune borne n'a été trouvée pour l'identifiant " + srb.getBorneId());
+                            }
                         }
-                        else {
-                            throw new IllegalStateException("Aucune borne n'a été trouvée pour l'identifiant "+srb.getBorneId());
-                        }
-                    }
-                    
+
                     saveSR.set(true);
                 }
             });

@@ -20,6 +20,7 @@ package fr.sirs.theme.ui;
 
 import fr.sirs.SIRS;
 import fr.sirs.core.model.AvecBornesTemporelles;
+import fr.sirs.ui.Growl;
 import fr.sirs.util.DatePickerConverter;
 import java.time.LocalDate;
 import java.util.function.Predicate;
@@ -63,6 +64,25 @@ public class FXValidityPeriodPane extends BorderPane {
             return debut == null? true : (debut.isBefore(date) || debut.isEqual(date));
         }));
 
+        uiDateDebut.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                final LocalDate dateFin = uiDateFin.getValue();
+                if (dateFin != null && dateFin.isBefore(newVal)) {
+                    new Growl(Growl.Type.WARNING, "Impossible d'avoir une date de fin antérieure à la date de début.").showAndFade();
+                    uiDateDebut.setValue(oldVal);
+                }
+            }
+        });
+
+        uiDateFin.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                final LocalDate dateDebut = uiDateDebut.getValue();
+                if (dateDebut != null && dateDebut.isAfter(newVal)) {
+                    new Growl(Growl.Type.WARNING, "Impossible d'avoir une date de fin antérieure à la date de début.").showAndFade();
+                    uiDateFin.setValue(oldVal);
+                }
+            }
+        });
         DatePickerConverter.register(uiDateDebut);
         DatePickerConverter.register(uiDateFin);
     }

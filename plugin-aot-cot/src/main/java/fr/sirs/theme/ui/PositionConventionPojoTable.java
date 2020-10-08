@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -27,6 +27,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.Property;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
@@ -45,23 +46,23 @@ import javafx.stage.Modality;
  */
 public class PositionConventionPojoTable extends ListenPropertyPojoTable<String>{
 
-    public PositionConventionPojoTable(String title) {
-        super(PositionConvention.class, title);
+    public PositionConventionPojoTable(String title, final ObjectProperty<? extends Element> container) {
+        super(PositionConvention.class, title, container);
     }
-    
+
     @Override
     protected PositionConvention createPojo() {
-        final Alert choice = new Alert(Alert.AlertType.NONE, 
+        final Alert choice = new Alert(Alert.AlertType.NONE,
                 "Le positionnement de convention est associable à un objet.\n"
                         + "L'association à un objet est facultative et peut être réalisée ultérieurement.\n"
-                        + "Voulez-vous associer un objet maintenant ?\n", 
+                        + "Voulez-vous associer un objet maintenant ?\n",
                 ButtonType.YES, ButtonType.NO);
         choice.setResizable(true);
         final Optional<ButtonType> result = choice.showAndWait();
-        
+
         final PositionConvention position;
         if(result.isPresent()&&result.get()==ButtonType.YES){
-            
+
             final ChoiceStage stage = new ChoiceStage();
             stage.initModality(Modality.APPLICATION_MODAL);
             stage.showAndWait();
@@ -92,8 +93,8 @@ public class PositionConventionPojoTable extends ListenPropertyPojoTable<String>
                 position.setLinearId(retrievedObjet.getLinearId());
                 position.setObjetId(retrievedElement.getId());
             }
-                
-                
+
+
             try {
                 ((Property<String>) propertyMethodToListen.invoke(position)).setValue(propertyReference);
             } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
@@ -113,12 +114,12 @@ public class PositionConventionPojoTable extends ListenPropertyPojoTable<String>
         session.getRepositoryForClass(PositionConvention.class).update(position);
         return position;
     }
-    
+
     private static class ChoiceStage extends PojoTableChoiceStage<Element> {
 
         private final Button ui_add;
         private final Button ui_cancel;
-        
+
         private ChoiceStage(){
             super();
             setTitle("Choix de l'élément");
@@ -129,7 +130,7 @@ public class PositionConventionPojoTable extends ListenPropertyPojoTable<String>
             final HBox hBox = new HBox(20., ui_add, ui_cancel);
             hBox.setAlignment(Pos.CENTER);
             hBox.setPadding(new Insets(10));
-            
+
             setScene(new Scene(new VBox(positionConventionChoicePane, hBox)));
             retrievedElement.bind(positionConventionChoicePane.selectedObjetProperty());
 
@@ -140,6 +141,6 @@ public class PositionConventionPojoTable extends ListenPropertyPojoTable<String>
                 hide();
                     });
         }
-        
+
     }
 }

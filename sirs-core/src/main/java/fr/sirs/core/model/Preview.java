@@ -20,6 +20,7 @@ package fr.sirs.core.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import fr.sirs.core.SirsCore;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 
@@ -121,6 +122,20 @@ public class Preview implements AvecLibelle, Comparable {
         return designationProperty;
     }
 
+    /**
+     * Récupération de la classe de l'élément, ou bien en cas de problème (ClassNotFoundException) la classe indiquée en paramètre.
+     * @param defaultClass
+     * @return
+     */
+    public Class<?> getJavaClassOr(final Class<?> defaultClass) {
+        try {
+            return Class.forName(getElementClass(), false, Thread.currentThread().getContextClassLoader());
+        } catch (ClassNotFoundException ex) {
+            SirsCore.LOGGER.warning(String.format("unexpected class name %s. Replace by %s.", getElementClass(), defaultClass.getCanonicalName()));
+            return defaultClass;
+        }
+    }
+
     @Override
     public String toString() {
         return "Preview{" + "docId=" + docId + ", docClass=" + docClass + ", elementId=" + elementId + ", elementClass=" + elementClass + ", author=" + author + ", valid=" + valid + ", designation=" + designationProperty + ", label=" + libelleProperty.get() + '}';
@@ -180,7 +195,7 @@ public class Preview implements AvecLibelle, Comparable {
                 return designationComparison;
             }
 
-            return getLibelle() == null || other.getLibelle() == null ? 0 
+            return getLibelle() == null || other.getLibelle() == null ? 0
                     : getLibelle().compareTo(other.getLibelle());
         }
 

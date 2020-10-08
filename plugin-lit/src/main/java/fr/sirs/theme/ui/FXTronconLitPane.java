@@ -44,6 +44,7 @@ import fr.sirs.theme.AbstractTheme.ThemeManager;
 import fr.sirs.theme.TronconTheme;
 import java.util.ArrayList;
 import java.util.List;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
@@ -219,43 +220,43 @@ public class FXTronconLitPane extends AbstractFXElementPane<TronconLit> {
                     ui_centerPane.setCenter(ui_mainBox);
                 } else if (newValue.equals("Ouvrages associés")) {
                     ThemeManager manager = AbstractTheme.generateThemeManager("Tableau des ouvrages associés", OuvrageAssocieLit.class);
-                    final LitThemePojoTable table = new LitThemePojoTable(manager);
+                    final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
                     table.setDeletor(manager.getDeletor());
                     table.setForeignParentId(newElement.getId());
                     ui_centerPane.setCenter(table);
                 } else if (newValue.equals("Type d'occupation riveraine")) {
                     ThemeManager manager = AbstractTheme.generateThemeManager("Tableau des occupations riveraines", OccupationRiveraineLit.class);
-                    final LitThemePojoTable table = new LitThemePojoTable(manager);
+                    final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
                     table.setDeletor(manager.getDeletor());
                     table.setForeignParentId(newElement.getId());
                     ui_centerPane.setCenter(table);
                 } else if (newValue.equals("Pente moyenne")) {
                     ThemeManager manager = AbstractTheme.generateThemeManager("Tableau des pentes", PenteLit.class);
-                    final LitThemePojoTable table = new LitThemePojoTable(manager);
+                    final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
                     table.setDeletor(manager.getDeletor());
                     table.setForeignParentId(newElement.getId());
                     ui_centerPane.setCenter(table);
                 } else if (newValue.equals("Largeur moyenne")) {
                     ThemeManager manager = AbstractTheme.generateThemeManager("Tableau des largeurs", LargeurLit.class);
-                    final LitThemePojoTable table = new LitThemePojoTable(manager);
+                    final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
                     table.setDeletor(manager.getDeletor());
                     table.setForeignParentId(newElement.getId());
                     ui_centerPane.setCenter(table);
                 } else if (newValue.equals("Type d'écoulement")) {
                     ThemeManager manager = AbstractTheme.generateThemeManager("Tableau des régimes d'écoulement", RegimeEcoulementLit.class);
-                    final LitThemePojoTable table = new LitThemePojoTable(manager);
+                    final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
                     table.setDeletor(manager.getDeletor());
                     table.setForeignParentId(newElement.getId());
                     ui_centerPane.setCenter(table);
                 } else if (newValue.equals("Domanialité")) {
                     ThemeManager manager = AbstractTheme.generateThemeManager("Tableau des domanialité", DomanialiteLit.class);
-                    final LitThemePojoTable table = new LitThemePojoTable(manager);
+                    final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
                     table.setDeletor(manager.getDeletor());
                     table.setForeignParentId(newElement.getId());
                     ui_centerPane.setCenter(table);
                 } else if (newValue.equals("Zone d'atterrissement")) {
                     ThemeManager manager = AbstractTheme.generateThemeManager("Tableau des zones d'atterrissement", ZoneAtterrissementLit.class);
-                    final LitThemePojoTable table = new LitThemePojoTable(manager);
+                    final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
                     table.setDeletor(manager.getDeletor());
                     table.setForeignParentId(newElement.getId());
                     ui_centerPane.setCenter(table);
@@ -333,8 +334,8 @@ public class FXTronconLitPane extends AbstractFXElementPane<TronconLit> {
 
         private final TronconTheme.ThemeManager<T> group;
 
-        public LitThemePojoTable(TronconTheme.ThemeManager<T> group) {
-            super(group.getDataClass(), group.getTableTitle());
+        public LitThemePojoTable(TronconTheme.ThemeManager<T> group, final ObjectProperty<? extends Element> container) {
+            super(group.getDataClass(), group.getTableTitle(), container);
             foreignParentIdProperty.addListener(this::updateTable);
             this.group = group;
         }

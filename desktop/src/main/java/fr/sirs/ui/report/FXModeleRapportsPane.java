@@ -25,12 +25,16 @@ import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.model.Preview;
 import fr.sirs.core.model.report.ModeleRapport;
 import fr.sirs.theme.ui.AbstractFXElementPane;
+import fr.sirs.ui.Growl;
+import java.util.Iterator;
+import java.util.List;
 import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ListCell;
 import javafx.scene.control.ListView;
@@ -47,9 +51,15 @@ import javafx.scene.layout.BorderPane;
  * @author Alexis Manin (Geomatys)
  */
 public class FXModeleRapportsPane extends BorderPane {
-
+    
     @FXML
     private ListView<Preview> uiReportList;
+    
+    @FXML
+    private Button uiAdd;
+    
+    @FXML
+    private Button uiDelete;
 
     /**
      * Editor for currently selected model
@@ -61,6 +71,10 @@ public class FXModeleRapportsPane extends BorderPane {
     public FXModeleRapportsPane() {
         super();
         SIRS.loadFXML(this);
+        
+        
+        uiAdd.disableProperty().bind(Injector.getSession().adminOrUserOrExtern().not());
+        uiDelete.disableProperty().bind(Injector.getSession().adminOrUserOrExtern().not());
 
         final Session session = Injector.getSession();
         repo = session.getRepositoryForClass(ModeleRapport.class);
@@ -70,6 +84,7 @@ public class FXModeleRapportsPane extends BorderPane {
 
         uiReportList.getSelectionModel().selectedItemProperty().addListener(this::selectionChanged);
         uiReportList.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        
 
         uiReportList.setItems(SIRS.observableList(session.getPreviews().getByClass(ModeleRapport.class)).sorted());
         uiReportList.setCellFactory((ListView<Preview> param) -> {
@@ -84,6 +99,12 @@ public class FXModeleRapportsPane extends BorderPane {
                     } else {
                         final String libelle = item.getLibelle();
                         setText((libelle == null || libelle.isEmpty())? "Sans nom" : libelle);
+                    }
+                    
+                    if (item != null && !item.getValid()) {
+                        getStyleClass().add("invalidRow");
+                    } else {
+                        getStyleClass().removeAll("invalidRow");
                     }
                 }
             };
@@ -112,10 +133,10 @@ public class FXModeleRapportsPane extends BorderPane {
         p.setElementId(newModele.getId());
         p.setDocId(newModele.getId());
     }
-
+    
     @FXML
     void deleteReport(ActionEvent event) {
-        ObservableList<Preview> selectedItems = uiReportList.getSelectionModel().getSelectedItems();
+        final ObservableList<Preview> selectedItems = uiReportList.getSelectionModel().getSelectedItems();
         if (selectedItems == null || selectedItems.isEmpty()) {
             return;
         }
@@ -128,11 +149,36 @@ public class FXModeleRapportsPane extends BorderPane {
 
         alert.setResizable(true);
         if (ButtonType.YES.equals(alert.showAndWait().orElse(ButtonType.NO))) {
-            final String[] modeles = new String[selectedItems.size()];
-            for (int i = 0; i < modeles.length; i++) {
-                modeles[i] = selectedItems.get(i).getElementId();
+            
+            // 1- on commence par récupérer les identifiants à partir des éléments sélectionnés
+            final String[] ids = new String[selectedItems.size()];
+            for (int i = 0; i < ids.length; i++) {
+                ids[i] = selectedItems.get(i).getElementId();
             }
-            repo.executeBulkDelete(repo.get(modeles));
+            
+            // 2- on récupère les modèles de rapport en base.
+            final List<ModeleRapport> modeles = repo.get(ids);
+            
+            // 3- on vérifie pour chaque rapport s'il peut être supprimé par l'utilisateur connecté
+            final Iterator<ModeleRapport> it = modeles.iterator();
+            boolean authorized = true;
+            while(it.hasNext()){
+                final ModeleRapport modele = it.next();
+                
+                // On vérifie les droits de l'utilisateur courant à supprimer le modèle
+                if(!Injector.getSession().editionAuthorized(modele)){
+                    it.remove();// On enlève le modèle de la liste à supprimer.
+                    authorized=false;
+                }
+            } 
+            
+            // 4- si on a détecté des rapports qui ne peuvent être supprimés, on avertit l'utilisateur
+            if (!authorized) {
+                new Growl(Growl.Type.WARNING, "Certains éléments n'ont pas été supprimés car vous n'avez pas les droits nécessaires.").showAndFade();
+            }
+            
+            // 5- on applique la suppression en base
+            repo.executeBulkDelete(modeles);
         }
     }
 

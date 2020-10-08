@@ -80,11 +80,11 @@ public class FXDesordreDependancePane extends AbstractFXElementPane<DesordreDepe
         ui_dependanceId_link.disableProperty().bind(ui_dependanceId.getSelectionModel().selectedItemProperty().isNull());
         ui_dependanceId_link.setGraphic(new ImageView(SIRS.ICON_LINK));
         ui_dependanceId_link.setOnAction((ActionEvent e)->Injector.getSession().showEditionTab(ui_dependanceId.getSelectionModel().getSelectedItem()));
-        observationsTable = new PojoTable(ObservationDependance.class, null);
+        observationsTable = new PojoTable(ObservationDependance.class, null, elementProperty());
         observationsTable.editableProperty().bind(disableFieldsProperty().not());
         ui_observations.setContent(observationsTable);
         ui_observations.setClosable(false);
-        evenementHydrauliqueIdsTable = new ListeningPojoTable(EvenementHydraulique.class, null);
+        evenementHydrauliqueIdsTable = new ListeningPojoTable(EvenementHydraulique.class, null, elementProperty());
         evenementHydrauliqueIdsTable.editableProperty().bind(disableFieldsProperty().not());
         evenementHydrauliqueIdsTable.createNewProperty().set(false);
         ui_evenementHydrauliqueIds.setContent(evenementHydrauliqueIdsTable);

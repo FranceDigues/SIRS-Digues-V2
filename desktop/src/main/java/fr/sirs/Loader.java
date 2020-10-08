@@ -272,7 +272,7 @@ public class Loader extends Application {
                 }
 
                 final Plugin[] plugins = Plugins.getPlugins();
-                final int total = 8 + plugins.length;
+                final int total = 9 + plugins.length;
 
                 // EPSG DATABASE ///////////////////////////////////////////////
                 updateProgress(inc++, total);
@@ -344,6 +344,11 @@ public class Loader extends Application {
                 updateProgress(inc++, total);
                 updateMessage("Synchronisation des listes de références");
                 Injector.getSession().getTaskManager().submit(Injector.getSession().getReferenceChecker());
+
+                // COPIE LOCALE DES REQUÊTES PRÉPROGRAMMÉES
+                updateProgress(inc++, total);
+                updateMessage("Copie des requêtes préprogrammées");
+                Injector.getSession().getTaskManager().submit(Injector.getSession().getQueryChecker());
 
                 // OVER
                 updateProgress(total, total);

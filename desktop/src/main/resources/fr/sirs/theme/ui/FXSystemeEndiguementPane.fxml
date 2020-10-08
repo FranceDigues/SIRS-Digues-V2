@@ -43,18 +43,18 @@
                 <RowConstraints minHeight="10.0" prefHeight="30.0" vgrow="SOMETIMES" />
               </rowConstraints-->
               <children>
-                   <!-- EString -->                 
+                   <!-- EString -->
                    <Label text="%libelle" GridPane.rowIndex="0" />
                    <TextField fx:id="ui_libelle" GridPane.columnIndex="1" GridPane.rowIndex="0"  />
-                   <!-- EInt -->                 
+                   <!-- EInt -->
                    <Label text="%populationProtegee" GridPane.rowIndex="1" />
                    <Spinner fx:id="ui_populationProtegee" GridPane.columnIndex="1" GridPane.rowIndex="1"  maxHeight="-Infinity" maxWidth="-Infinity"/>
-                   <!-- EString -->                 
+                   <!-- EString -->
                    <Label text="%classement" GridPane.rowIndex="2" />
                    <TextField fx:id="ui_classement" GridPane.columnIndex="1" GridPane.rowIndex="2"  maxHeight="-Infinity" maxWidth="-Infinity"/>
-                   <!-- EFloat -->                 
+                   <!-- EFloat -->
                    <Label text="%niveauProtection" GridPane.rowIndex="3" />
-                   <Spinner fx:id="ui_niveauProtection" GridPane.columnIndex="1" GridPane.rowIndex="3"  maxHeight="-Infinity" maxWidth="-Infinity"/>
+                   <TextField fx:id="ui_niveauProtection" GridPane.columnIndex="1" GridPane.rowIndex="3"  maxHeight="-Infinity" maxWidth="-Infinity"/>
                    <Label text="%gestionnaireDecretId" GridPane.rowIndex="4" />
                    <ComboBox fx:id="ui_gestionnaireDecretId" GridPane.columnIndex="1" GridPane.rowIndex="4" />
                    <Button fx:id="ui_gestionnaireDecretId_link" GridPane.columnIndex="2" GridPane.rowIndex="4" />

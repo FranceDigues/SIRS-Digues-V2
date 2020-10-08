@@ -20,6 +20,7 @@ package fr.sirs.core;
 
 import fr.sirs.core.component.DocumentChangeEmiter;
 import fr.sirs.index.ElasticSearchEngine;
+import java.util.logging.Level;
 import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -36,6 +37,7 @@ public class InjectorCore implements ApplicationContextAware {
 
     @Override
     public void setApplicationContext(ApplicationContext ac) throws BeansException {
+        SirsCore.LOGGER.log(Level.INFO, "Récupération du contexte d'application");
         applicationContext = ac;
     }
 

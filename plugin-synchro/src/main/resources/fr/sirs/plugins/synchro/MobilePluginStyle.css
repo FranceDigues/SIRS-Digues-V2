@@ -57,3 +57,11 @@
 .split-pane > * > * {
     -fx-box-border: lightgrey;
 }
+
+.warn-label {
+    -fx-font-style: italic;
+    -fx-font-weight: bold;
+    -fx-background-color: #e2e351;
+    -fx-background-radius: 7;
+    -fx-padding:4;
+}

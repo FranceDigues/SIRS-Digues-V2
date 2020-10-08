@@ -43,8 +43,8 @@ public class FXPointCell<S> extends FXTableCell<S, Object> {
 
     private static final NumberFormat FORMAT = new DecimalFormat("#0.00");
 
-    private final Spinner x = new Spinner(new SpinnerValueFactory.DoubleSpinnerValueFactory(Double.MIN_VALUE, Double.MAX_EXPONENT));
-    private final Spinner y = new Spinner(new SpinnerValueFactory.DoubleSpinnerValueFactory(Double.MIN_VALUE, Double.MAX_EXPONENT));
+    private final Spinner x = new Spinner(new SpinnerValueFactory.DoubleSpinnerValueFactory(Double.MIN_VALUE, Double.MAX_VALUE));
+    private final Spinner y = new Spinner(new SpinnerValueFactory.DoubleSpinnerValueFactory(Double.MIN_VALUE, Double.MAX_VALUE));
     private final VBox vbox = new VBox(x,y);
 
     private CoordinateReferenceSystem crs = null;
@@ -53,6 +53,8 @@ public class FXPointCell<S> extends FXTableCell<S, Object> {
         setGraphic(vbox);
         setAlignment(Pos.CENTER);
         setContentDisplay(ContentDisplay.CENTER);
+        x.setEditable(true);
+        y.setEditable(true);
     }
 
     @Override

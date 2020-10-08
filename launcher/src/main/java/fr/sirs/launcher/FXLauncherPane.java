@@ -29,6 +29,9 @@ import static fr.sirs.SIRS.binaryMD5;
 import static fr.sirs.SIRS.hexaMD5;
 import fr.sirs.Session;
 import fr.sirs.core.CacheRules;
+import fr.sirs.core.SirsCore;
+import fr.sirs.core.SirsDBInfo;
+import fr.sirs.core.component.CouchSGBD;
 import fr.sirs.core.component.DatabaseRegistry;
 import fr.sirs.core.component.SirsDBInfoRepository;
 import fr.sirs.core.component.UtilisateurRepository;
@@ -42,8 +45,10 @@ import fr.sirs.maj.PluginInstaller;
 import fr.sirs.maj.PluginList;
 import fr.sirs.util.SimpleButtonColumn;
 import fr.sirs.util.property.SirsPreferences;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -55,6 +60,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -88,6 +94,7 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
@@ -159,11 +166,11 @@ public class FXLauncherPane extends BorderPane {
 
     // onglet base distantes
     @FXML
-    private TextField uiDistantName;
-    @FXML
     private TextField uiDistantUrl;
     @FXML
     private CheckBox uiDistantSync;
+    @FXML
+    private TextField uiLocalName;
     @FXML
     private VBox uiSynchroRunning;
 
@@ -232,6 +239,14 @@ public class FXLauncherPane extends BorderPane {
         uiProgressPlugins.setVisible(false);
 
         localRegistry = new DatabaseRegistry();
+
+        CouchSGBD sgbdInfo = localRegistry.getSGBDInfo();
+
+        // Developped for couchdb 2.X but allow to try using use version 3.X
+        if(!sgbdInfo.getVersion().matches("(2|3).*") && Boolean.valueOf(SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.CHECK_COUCHDB_VERSION))){
+            alertCouchDBVersion(sgbdInfo);
+        }
+
 
         errorLabel.setTextFill(Color.RED);
         errorLabel.visibleProperty().bind(errorLabel.textProperty().isNotEmpty());
@@ -320,7 +335,7 @@ public class FXLauncherPane extends BorderPane {
             }
         });
 
-        uiDistantName.textProperty().addListener(dbNameFormat);
+        uiLocalName.textProperty().addListener(dbNameFormat);
         uiImportName.textProperty().addListener(dbNameFormat);
         uiNewName.textProperty().addListener(dbNameFormat);
 
@@ -456,16 +471,32 @@ public class FXLauncherPane extends BorderPane {
 
     @FXML
     void connectDistant(ActionEvent event) {
-        if (uiDistantName.getText().trim().isEmpty()) {
+        if (uiLocalName.getText().trim().isEmpty()) {
             final Alert alert = new Alert(Alert.AlertType.ERROR, "Veuillez remplir le nom de la base de donnée.", ButtonType.OK);
             alert.setResizable(true);
             alert.showAndWait();
             return;
         }
 
-        final String distantUrl = uiDistantUrl.getText();
         final Task t = new TaskManager.MockTask("", () -> {
-            localRegistry.synchronizeSirsDatabases(distantUrl, uiDistantName.getText(), uiDistantSync.isSelected());
+
+            final String distantUrl = uiDistantUrl.getText();
+            final String localUrl = SirsPreferences.INSTANCE.getProperty(
+                            SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR) + uiLocalName.getText();
+
+            localRegistry.synchronizeSirsDatabases(distantUrl, localUrl, false);
+
+            /*
+            HACK : par pricipe, la réponse à une requête de réplication non continue est synchrone alors que la réponse
+            à une requête de réplicatoin continue est asynchrone (SYM-1820).
+            MAIS le client souhaite attendre la "fin" de la réplication dans tous les cas avant de passer à l'onglet de
+            connexion aux bases locales. Comme la "fin" d'une réplication continue n'a pas de sens, on commence par
+            réaliser une réplication non continue, on attend la fin, puis on renouvelle la requête pour la transformer
+            en réplication continue.
+            */
+            if (uiDistantSync.isSelected()) {
+                localRegistry.synchronizeSirsDatabases(distantUrl, localUrl, true);
+            }
             return true;
         });
 
@@ -479,6 +510,17 @@ public class FXLauncherPane extends BorderPane {
 
         t.setOnSucceeded(evt -> Platform.runLater(() -> {
             //aller au panneau principal
+            /*
+            HACK : on attend que CouchDB ait eu le temps de mettre à jour la liste des tâches de réplication en cours
+            afin que la colonne d'arrêt/reprise de réplication rende bien compte de l'état réel des bases en cours de
+            synchronisation (en particulier pour la base qui vient d'être répliquée). Voir SYM-1808.
+            */
+            try {
+                LOGGER.log(Level.FINE, "Attente de la mise à jour des synchronisations en cours par CouchDB");
+                Thread.sleep(5000l);
+            } catch (InterruptedException ex) {
+                LOGGER.log(Level.FINE, "Cannot update distant plugin list !", ex);
+            }
             updateLocalDbList();
             uiTabPane.getSelectionModel().clearAndSelect(0);
         }));
@@ -945,7 +987,9 @@ public class FXLauncherPane extends BorderPane {
                                 || ButtonType.YES.equals(alert.showAndWait().get())) {
 
                                     final TaskManager.MockTask<org.ektorp.ReplicationStatus> copyTask = new TaskManager.MockTask("Copie de base de données", () -> {
-                                        return localRegistry.copyDatabase(sourceDb, destDbName);
+                                        return localRegistry.copyDatabase(
+                                                DatabaseRegistry.addAuthenticationInformation(SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR) + sourceDb),
+                                                DatabaseRegistry.addAuthenticationInformation(SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR) + destDbName), false);
                                     });
 
                                     final FXLoadingPane loading = new FXLoadingPane(copyTask);
@@ -973,6 +1017,40 @@ public class FXLauncherPane extends BorderPane {
                                             alerte.setResizable(true);
                                             alerte.show();
                                         }
+
+                                        /*
+                                        * ======================================
+                                        * Si la base de données copiée est
+                                        * associé à une base distante
+                                        * (synchronisable) on propose à
+                                        * l'utilisateur de conserver ou non
+                                        * cette association sur la copie.
+                                        * Redmine#6727
+                                        */
+                                        try {
+                                            SirsDBInfo destDBInfo = localRegistry
+                                                    .getInfo(destDbName)
+                                                    .orElseThrow(() -> new IllegalStateException("Une erreur s'est produite lors de la récupération des informations de la base de données copiée."));
+
+                                            if (destDBInfo.getRemoteDatabase() != null) {
+                                                final Alert confirmation = new Alert(
+                                                        Alert.AlertType.WARNING,
+                                                        "Voulez-vous associer la base copiée à la base de données distantes?\n (Offre la possibilité de synchroniser la copie avec la base de données distantes)",
+                                                        ButtonType.NO, ButtonType.YES);
+                                                confirmation.setResizable(true);
+                                                ButtonType choice = confirmation.showAndWait().get();
+                                                if (!choice.equals(ButtonType.YES)) {
+
+                                                    destDBInfo.setRemoteDatabase(null);
+                                                    localRegistry.createConnector(destDbName, DatabaseRegistry.DatabaseConnectionBehavior.DEFAULT).update(destDBInfo);
+
+                                                };
+                                            }
+                                        } catch (IOException | IllegalArgumentException ex) {
+                                            LOGGER.log(Level.WARNING, "Une exception c'est produite lors de la suppression de la base distante associée à la copie locale.", ex);
+                                        }
+                                        //======================================
+
                                         updateLocalDbList();
                                     }));
 
@@ -1056,10 +1134,16 @@ public class FXLauncherPane extends BorderPane {
                     final UtilisateurRepository utilisateurRepository = (UtilisateurRepository) ctx.getBean(Session.class).getRepositoryForClass(Utilisateur.class);
 
                     final List<Utilisateur> utilisateurs = utilisateurRepository.getByLogin(login.getText());
-                    final String encryptedPassword = hexaMD5(password.getText());
+                    final String encryptedPassword;
+                    if(password.getText() == null || password.getText().isEmpty()) {
+                        encryptedPassword = null;
+                    } else {
+                        encryptedPassword = hexaMD5(password.getText());
+                    }
                     boolean allowedToDropDB = false;
                     for (final Utilisateur utilisateur : utilisateurs) {
-                        if (encryptedPassword.equals(utilisateur.getPassword())) {
+//                        if (encryptedPassword.equals(utilisateur.getPassword()) || ((utilisateur.getPassword() == null) && encryptedPassword.equals(hexaMD5(""))) ){
+                        if ( ((utilisateur.getPassword() == null) && (encryptedPassword == null)) || ((encryptedPassword != null))&&(encryptedPassword.equals(utilisateur.getPassword())) ){
                             allowedToDropDB = true;
                             break;
                         }
@@ -1145,5 +1229,74 @@ public class FXLauncherPane extends BorderPane {
                 LOGGER.log(Level.SEVERE, ex.getLocalizedMessage(), ex);
             }
         }
+    }
+
+    /**
+     * Affichage de l'alerte de version de CouchDB.
+     *
+     * @param sgbdInfo
+     * @throws IOException
+     */
+    private void alertCouchDBVersion(CouchSGBD sgbdInfo) throws IOException{
+
+        // 1- énumération des bases de données
+        final StringJoiner list = new StringJoiner(System.lineSeparator());
+        for(final String db : localRegistry.listSirsDatabases()){
+            list.add(db);
+        }
+
+        // 2- préparation du contenu de l'avertissement à l'utilisateur : formatage de l'en-tête avec les information locales
+        final StringBuilder textContent = new StringBuilder(String.format(
+                          "           CHANGEMENT DE VERSION DU SGBD COUCHDB DU SIRSv2           " + System.lineSeparator()
+                        + "                de CouchDB 1 vers CouchDB 2 ou plus                  " + System.lineSeparator()
+                        + System.lineSeparator()
+                        + "Une version minimale de CouchDB 2.x.x est dorénavant requise pour    " + System.lineSeparator()
+                        + "héberger les données de la version courante du SIRSv2.               " + System.lineSeparator()
+                        + System.lineSeparator()
+                        + "La version de CouchDB trouvée sur le système est actuellement %s.    " + System.lineSeparator()
+                        + System.lineSeparator()
+                        + "Merci de mettre à niveau votre SGBD CouchDB vers une version CouchDB 2"+ System.lineSeparator()
+                        + "en prenant soin de sauvegarder les fichiers de données de vos bases."  + System.lineSeparator()
+                        + System.lineSeparator()
+                        + "Si vous disposez déjà d'un système CouchDB 2, local, veuillez        " + System.lineSeparator()
+                        + "paramétrer la préférence %s en conséquence dans la configuration de  " + System.lineSeparator()
+                        + "l'application (%s). Sa valeur est actuellement la suivante :         " + System.lineSeparator()
+                        + System.lineSeparator()
+                        + "%s=%s                                                                " + System.lineSeparator()
+                        + System.lineSeparator()
+                        + "À titre indicatif, votre système CouchDB recense les bases suivantes :"+ System.lineSeparator()
+                        + System.lineSeparator()
+                        + "%s" + System.lineSeparator()
+                        + System.lineSeparator(),
+                sgbdInfo.getVersion(),
+                SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR.name(),
+                SirsCore.CONFIGURATION_PATH.toString(),
+                SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR.name(),
+                SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR.name()),
+                list.toString()));
+
+        // 3- Indications de migration des données
+        try(final BufferedReader reader = new BufferedReader(new InputStreamReader(FXLauncherPane.class.getResourceAsStream("couchDB1ToCouchDB2.txt")))){
+            String line;
+            while((line = reader.readLine()) != null){
+                textContent.append(line).append(System.lineSeparator());
+            }
+        }
+
+        // 4- Paramétrage de l'affichage du texte
+        final TextArea area = new TextArea(textContent.toString());
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setPrefHeight(451);
+        area.setPrefWidth(777);
+
+        // 5- Ouverture de la fenêtre
+        final ButtonType exit = new ButtonType("Quitter");
+        final Alert alert = new Alert(Alert.AlertType.INFORMATION, null, exit);
+        alert.setHeaderText("Le système CouchDB détecté doit être mis à jour.");
+        alert.initModality(Modality.APPLICATION_MODAL);
+        alert.getDialogPane().setContent(area);
+        alert.showAndWait();
+        System.exit(0);
     }
 }

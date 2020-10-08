@@ -2,7 +2,7 @@
 <ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="dependance" nsURI="http://fr.sirs/dependance">
   <eClassifiers xsi:type="ecore:EClass" name="AbstractDependance" abstract="true"
-      eSuperTypes="../../sirs-core/model/sirs.ecore#//AotCotAssociable ../../sirs-core/model/sirs.ecore#//AvecGeometrie">
+      eSuperTypes="../../sirs-core/model/sirs.ecore#//AotCotAssociable ../../sirs-core/model/sirs.ecore#//AvecSettableGeometrie">
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="valid" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="designation" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="author" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
@@ -69,7 +69,7 @@
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="libelle" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="photographeId" eType="ecore:EClass ../../sirs-core/model/sirs.ecore#//Contact"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DesordreDependance" eSuperTypes="../../sirs-core/model/sirs.ecore#//AvecGeometrie">
+  <eClassifiers xsi:type="ecore:EClass" name="DesordreDependance" eSuperTypes="../../sirs-core/model/sirs.ecore#//AvecSettableGeometrie">
     <eAnnotations source="couchDBDocument"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="valid" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="designation" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>

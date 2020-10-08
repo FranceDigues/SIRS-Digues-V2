@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -40,12 +40,12 @@ public class FXConventionPane extends FXConventionPaneStub {
     private FXConventionPane() {
 
         super();
-        positionDocumentTable = new PositionConventionPojoTable(null);
+        positionDocumentTable = new PositionConventionPojoTable(null, elementProperty());
         positionDocumentTable.editableProperty().bind(disableFieldsProperty().not());
         ui_positionDocument.setContent(positionDocumentTable);
         ui_positionDocument.setClosable(false);
     }
-    
+
     public FXConventionPane(final Convention convention){
         this();
         this.elementProperty().set(convention);

@@ -95,6 +95,8 @@ public class FXElementContainerPane<T extends Element> extends AbstractFXElement
         });
 
         if (element != null) {
+            uiMode.validProperty().bind(element.validProperty());
+            uiMode.authorIDProperty().bind(element.authorProperty());
             uiMode.requireEditionForElement(element, newlyCreated);
             setElement((T) element);
             if (uiMode.editionState().get())

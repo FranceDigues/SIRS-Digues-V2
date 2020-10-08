@@ -27,7 +27,11 @@ import fr.sirs.core.model.AvecPhotos;
 import fr.sirs.core.model.Desordre;
 import fr.sirs.core.model.Element;
 import fr.sirs.core.model.LabelMapper;
+import fr.sirs.core.model.OuvrageHydrauliqueAssocie;
+import fr.sirs.core.model.ReseauHydrauliqueCielOuvert;
+import fr.sirs.core.model.ReseauHydrauliqueFerme;
 import fr.sirs.core.model.SIRSFileReference;
+import fr.sirs.core.model.StationPompage;
 import fr.sirs.plugins.synchro.SynchroPlugin;
 import fr.sirs.plugins.synchro.ui.PhotoDestination;
 import fr.sirs.plugins.synchro.ui.PrefixComposer;
@@ -157,7 +161,7 @@ public class PhotoImportPane extends StackPane {
 
         uiImportProgress.visibleProperty().bind(taskProperty.isNotNull());
 
-        destPane = new PhotoDestination();
+        destPane = new PhotoDestination(Injector.getSession());
         prefixPane = new PrefixComposer();
         uiParameterContainer.getChildren().addAll(destPane, prefixPane);
     }
@@ -463,6 +467,14 @@ public class PhotoImportPane extends StackPane {
                     photoContainers.add((AvecPhotos) e);
                 } else if (e instanceof Desordre) {
                     photoContainers.addAll(((Desordre) e).observations);
+                } else if (e instanceof OuvrageHydrauliqueAssocie) {
+                    photoContainers.addAll(((OuvrageHydrauliqueAssocie) e).observations);
+                } else if (e instanceof ReseauHydrauliqueFerme) {
+                    photoContainers.addAll(((ReseauHydrauliqueFerme) e).observations);
+                } else if (e instanceof ReseauHydrauliqueCielOuvert) {
+                    photoContainers.addAll(((ReseauHydrauliqueCielOuvert) e).observations);
+                } else if (e instanceof  StationPompage) {
+                    photoContainers.addAll(((StationPompage) e).observations);
                 }
 
                 scan:

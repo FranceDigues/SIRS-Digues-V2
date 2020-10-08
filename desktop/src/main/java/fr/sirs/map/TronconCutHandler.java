@@ -28,12 +28,15 @@ import fr.sirs.Session;
 import fr.sirs.core.LinearReferencingUtilities;
 import fr.sirs.core.SirsCore;
 import fr.sirs.core.TronconUtils;
+import fr.sirs.core.model.AvecBornesTemporelles;
 import fr.sirs.core.model.TronconDigue;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
 import java.util.logging.Level;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -452,14 +455,28 @@ public class TronconCutHandler extends AbstractNavigationHandler {
             updateMessage(StringUtilities.firstToUpper(typeName) + " " + toCut.getLibelle());
 
             final Session session = Injector.getSession();
+            
+            // Agrégat des sections conservées
             TronconDigue aggregate = null;
+            
+            // Liste des tronçons archivés
+            final List<TronconDigue> archived = new ArrayList<>();
+            
+            // Date d'archivage
             final LocalDate yesterday = LocalDate.now().minusDays(1);
+            // Prédicat d'archivage : on force la modification de la date d'archivage pour tout ce qui a une date d'archivage non nulle mais ultérieure
+            final Predicate<AvecBornesTemporelles> archiveIf = new AvecBornesTemporelles.ArchivePredicate(yesterday);
+            
+            // Parcours des segments issus du découpage
             for (int i = 0, n = segments.size(); i < n; i++) {
 
                 updateProgress(i, n);
 
+                // récupération des informations du segment courant
                 final FXTronconCut.Segment segment = segments.get(i);
                 final String segmentName = segment.nameProperty.get()==null || segment.nameProperty.get().isEmpty() ? toCut.getLibelle() + "[" + i + "]" : segment.nameProperty.get();
+                
+                // création d'un tronçon à partir du segment
                 final TronconDigue cut = TronconUtils.cutTroncon(toCut, segment.geometryProp.get(), segmentName, session);
 
                 final FXTronconCut.SegmentType type = segment.typeProp.get();
@@ -480,7 +497,8 @@ public class TronconCutHandler extends AbstractNavigationHandler {
                     case ARCHIVER:
                         //on marque comme terminé le troncon et ses structures
                         // TODO : check failures ?
-                        final List<DocumentOperationResult> result = TronconUtils.archiveSectionWithTemporalObjects(cut, session, yesterday, true);
+                        archived.add(cut);// on garde le tronçon archivé pour examiner l'archivage de ses bornes
+                        final List<DocumentOperationResult> result = TronconUtils.archiveSectionWithTemporalObjects(cut, session, yesterday, archiveIf);
                         for (final DocumentOperationResult failure : result) {
                             SirsCore.LOGGER.log(Level.WARNING, "Update failed : ".concat(failure.getError()));
                         }
@@ -494,13 +512,20 @@ public class TronconCutHandler extends AbstractNavigationHandler {
             }
 
             //on archive l'ancien troncon et les objets dessus
-            updateMessage("Finalisation du découpage pour "+toCut.getLibelle());
+            updateMessage("Archivage du tronçon découpé "+toCut.getLibelle());
 
             // TODO : check failures ?
-            final List<DocumentOperationResult> result = TronconUtils.archiveSectionWithTemporalObjects(toCut, session, yesterday, true);
+            List<DocumentOperationResult> result = TronconUtils.archiveSectionWithTemporalObjects(toCut, session, yesterday, archiveIf);
             for (final DocumentOperationResult failure : result) {
                 SirsCore.LOGGER.log(Level.WARNING, "Update failed : ".concat(failure.getError()));
             }
+            
+            updateMessage("Archivage des bornes… "+toCut.getLibelle());
+            result = new ArrayList<>();
+            for(final TronconDigue cut : archived){
+                result.addAll(TronconUtils.archiveBornes(cut.getBorneIds(), session, yesterday, archiveIf));
+            }
+            result.addAll(TronconUtils.archiveBornes(toCut.getBorneIds(), session, yesterday, archiveIf));
 
             return true;
         }

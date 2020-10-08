@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -18,7 +18,9 @@
  */
 package fr.sirs.plugin.berge.ui;
 
+import fr.sirs.core.model.Element;
 import fr.sirs.theme.ui.PojoTable;
+import javafx.beans.property.ObjectProperty;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
@@ -37,14 +39,14 @@ import org.opengis.filter.Filter;
 public class BergesPojoTable extends PojoTable {
 
     private final TextField uiKeywordSearch = new TextField();
-    
+
      /**
      * Création de la table présentant les obligations réglementaires.
      *
      * @param clazz   Classe d'objets affichés par cette table
      */
-    public BergesPojoTable(final Class clazz) {
-        super(clazz, "Liste des berges");
+    public BergesPojoTable(final Class clazz, final ObjectProperty<? extends Element> container) {
+        super(clazz, "Liste des berges", container);
 
         if (getFilterUI() instanceof VBox) {
             final VBox vbox = (VBox) getFilterUI();
@@ -59,8 +61,9 @@ public class BergesPojoTable extends PojoTable {
 
         createNewProperty().set(false);
         uiAdd.visibleProperty().set(false);
+        setDeletor(b -> repo.remove(b));
     }
-    
+
     @Override
     public Filter getFilter() {
         if (uiKeywordSearch == null || uiKeywordSearch.getText().isEmpty()) {
@@ -75,7 +78,7 @@ public class BergesPojoTable extends PojoTable {
 
         return new DefaultAnd(filterKWSearch, filter);
     }
-    
+
     @Override
     public void resetFilter(final VBox filterContent) {
         super.resetFilter(filterContent);

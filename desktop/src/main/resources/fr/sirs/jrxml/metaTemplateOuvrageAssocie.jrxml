@@ -262,12 +262,26 @@
 					<text><![CDATA[Système de repérage]]></text>
 				</staticText>
 				<textField isStretchWithOverflow="true">
-					<reportElement positionType="Float" x="130" y="0" width="400" height="12" uuid="5a5856b2-3396-49af-8403-09282329adf5"/>
+					<reportElement positionType="Float" x="130" y="0" width="200" height="12" uuid="5a5856b2-3396-49af-8403-09282329adf5"/>
 					<textElement textAlignment="Justified" verticalAlignment="Middle">
 						<font  size="8"/>
 					</textElement>
 					<textFieldExpression><![CDATA[fr.sirs.util.JRXMLUtil.displayLabel($F{systemeRepId})]]></textFieldExpression>
 				</textField>
+                                <staticText>
+					<reportElement positionType="Float" x="330" y="0" width="120" height="12"/>
+					<textElement textAlignment="Left" verticalAlignment="Middle">
+						<font  size="8" isBold="true"/>
+					</textElement>
+					<text><![CDATA[Coordonnées éditées]]></text>
+				</staticText>
+				<textField isStretchWithOverflow="true">
+					<reportElement positionType="Float" x="430" y="0" width="115" height="12"/>
+					<textElement textAlignment="Justified" verticalAlignment="Middle">
+						<font  size="8"/>
+					</textElement>
+					<textFieldExpression><![CDATA[($F{editedGeoCoordinate}) ? "Coordonnées géographique" : ((!$F{editedGeoCoordinate}) ? "Coordonnées Linéaires" : "-")]]></textFieldExpression>
+                                </textField>    
 			</frame>
 			<frame>
 				<reportElement positionType="Float" mode="Opaque" x="0" y="196" width="555" height="12" backcolor="#FFFFFF" uuid="eb6e93f0-e640-48be-b20b-2ea7290d6109"/>

@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -19,9 +19,11 @@
 package fr.sirs.theme;
 
 import fr.sirs.Injector;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.EvenementHydraulique;
 import fr.sirs.theme.ui.PojoTable;
 import fr.sirs.util.SimpleFXEditMode;
+import javafx.beans.property.ObjectProperty;
 import javafx.scene.Parent;
 import javafx.scene.control.Separator;
 import javafx.scene.layout.BorderPane;
@@ -46,7 +48,7 @@ public class EvenementsHydrauliquesTheme extends Theme {
         final HBox topPane = new HBox(separator, editMode);
         HBox.setHgrow(separator, Priority.ALWAYS);
 
-        PojoTable pojoTable = new PojoTable(Injector.getSession().getRepositoryForClass(EvenementHydraulique.class), null);
+        PojoTable pojoTable = new PojoTable(Injector.getSession().getRepositoryForClass(EvenementHydraulique.class), null, (ObjectProperty<Element>) null);
         pojoTable.editableProperty().bind(editMode.editionState());
         return new BorderPane(pojoTable, topPane, null, null, null);
     }

@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -21,6 +21,7 @@ package fr.sirs.plugin.lit.ui;
 import fr.sirs.Injector;
 import fr.sirs.Session;
 import fr.sirs.core.model.AvecForeignParent;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.TronconLit;
 import fr.sirs.theme.AbstractTheme;
 import fr.sirs.theme.TronconTheme;
@@ -29,6 +30,7 @@ import fr.sirs.util.SimpleFXEditMode;
 import fr.sirs.util.SirsStringConverter;
 import java.util.List;
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.beans.value.ObservableValue;
@@ -86,8 +88,8 @@ public class FXLitThemePane extends BorderPane {
 
         private final TronconTheme.ThemeManager<T> group;
 
-        public LitThemePojoTable(TronconTheme.ThemeManager<T> group) {
-            super(group.getDataClass(), group.getTableTitle());
+        public LitThemePojoTable(TronconTheme.ThemeManager<T> group, final ObjectProperty<? extends Element> container) {
+            super(group.getDataClass(), group.getTableTitle(), container);
             foreignParentIdProperty.addListener(this::updateTable);
             this.group = group;
         }
@@ -107,7 +109,7 @@ public class FXLitThemePane extends BorderPane {
                 setTableItems(() -> (ObservableList) group.getExtractor().apply(newValue));
             }
         }
-        
+
         public BooleanProperty getEditableProperty() {
             return editableProperty;
         }
@@ -120,7 +122,7 @@ public class FXLitThemePane extends BorderPane {
         final HBox topPane = new HBox(separator, editMode);
         HBox.setHgrow(separator, Priority.ALWAYS);
 
-        final LitThemePojoTable table = new LitThemePojoTable(manager);
+        final LitThemePojoTable table = new LitThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
         table.setDeletor(manager.getDeletor());
         table.getEditableProperty().bind(editMode.editionState());
         table.foreignParentProperty().bindBidirectional(linearIdProperty);

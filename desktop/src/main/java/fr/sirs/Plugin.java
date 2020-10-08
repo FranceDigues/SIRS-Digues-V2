@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -20,6 +20,7 @@ package fr.sirs;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.sirs.core.SirsCore;
+import fr.sirs.core.component.DatabaseRegistry;
 import fr.sirs.core.model.Element;
 import fr.sirs.map.FXMapPane;
 import fr.sirs.theme.Theme;
@@ -29,6 +30,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
@@ -43,6 +45,7 @@ import javafx.scene.control.ToolBar;
 import javafx.scene.image.Image;
 import org.ektorp.CouchDbConnector;
 import org.geotoolkit.map.MapItem;
+import org.springframework.context.ConfigurableApplicationContext;
 
 /**
  * Un plugin est un ensemble de thèmes et de couches de données cartographique.
@@ -161,7 +164,7 @@ public abstract class Plugin {
      *
      * Note : lors de l'appel à cette méthode, la fonction {@link #load() } n'a
      * pas encore été appelée !
-     * 
+     *
      * @throws Exception Si l'opération éxécutée a échouée.
      */
     public void afterImport() throws Exception {}
@@ -242,22 +245,25 @@ public abstract class Plugin {
 
     /**
      * Override this method to provide a migration process from a given version
-     * of the plugin to the current one.
-     *
-     * Notes : this method is called only when the current plugin version is
-     * newer than the one given in database. It is called before {@link #load() }.
+     * of the plugin to the current one.Notes : this method is called only when the current plugin version is
+ newer than the one given in database.It is called before {@link #load()}.
      *
      * The returned task should not be submitted yet. Application will do it
-     * after user has confirmed his will to upgrade.
+ after user has confirmed his will to upgrade.
      *
      * @param fromMajor Major version of the plugin found in database.
      * @param fromMinor Minor version of the plugin found in database.
      * @param dbConnector Connector to the database to upgrade.
+     * @param upgradeTasks LinkedHashSet of Tasks to be filled with needed tasks
+     * which will perform updates (database objects, etc.)
+     * @param dbRegistry optional parameter which will be used if an
+     * {@linkplain ConfigurableApplicationContext application context}
+     * is needed, should with length {@literal <=} 1.
      *
-     * @return A task, ready to be submitted, which will perform updates (database objects, etc.)
-     * to make database and application ready to work with current plugin version.
+     * -> no more valid comments let if we want to change the returned type.
+     * //true if input upgradeTasks was filled with ready to be submitted tasks, which will perform updates (database objects, etc.)
+     * //to make database and application ready to work with current plugin version.
      */
-    public Optional<Task> findUpgradeTask(final int fromMajor, final int fromMinor, final CouchDbConnector dbConnector) {
-        return Optional.empty();
+    public void findUpgradeTasks(final int fromMajor, final int fromMinor, final CouchDbConnector dbConnector, final LinkedHashSet<Task> upgradeTasks, final DatabaseRegistry... dbRegistry) {
     }
 }

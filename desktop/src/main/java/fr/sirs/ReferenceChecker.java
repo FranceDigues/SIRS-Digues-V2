@@ -115,7 +115,7 @@ public class ReferenceChecker extends Task<Void> {
                 referenceClassChecker.checkReferenceClass();
                 referenceClassChecker.update();
             } catch (IOException ex) {
-                SIRS.LOGGER.log(WARNING, "Unable to check reference class "+reference.getName(), ex);
+                SIRS.LOGGER.log(WARNING, "Impossible de vérifier la classe de référence "+reference.getName(), ex);
             }
             updateProgress(progress++, progressSize);
         }

@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -23,6 +23,7 @@ import fr.sirs.core.SessionCore;
 import fr.sirs.core.SirsCoreRuntimeException;
 import fr.sirs.core.model.AbstractPhoto;
 import fr.sirs.core.model.AvecPhotos;
+import fr.sirs.core.model.Desordre;
 import fr.sirs.core.model.Element;
 import fr.sirs.core.model.ElementCreator;
 import fr.sirs.util.odt.ODTUtils;
@@ -33,8 +34,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.SimpleIntegerProperty;
+import java.util.stream.Stream;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import org.odftoolkit.simple.TextDocument;
@@ -53,22 +53,14 @@ import org.w3c.dom.Text;
 @Scope(value = ConfigurableBeanFactory.SCOPE_PROTOTYPE)
 public class FicheSectionRapport extends AbstractSectionRapport {
 
-    private final SimpleIntegerProperty nbPhotos = new SimpleIntegerProperty(0);
+    private int nbPhotos = 0;
 
-    /**
-     *
-     * @return The number of photos to print for a given element.
-     */
-    public IntegerProperty nbPhotosProperty() {
+    public int getNbPhotos() {
         return nbPhotos;
     }
 
-    public int getNbPhotos() {
-        return nbPhotos.get();
-    }
-
     public void setNbPhotos(int newValue) {
-        nbPhotos.set(newValue);
+        nbPhotos = newValue;
     }
 
     private final SimpleStringProperty modeleElementId = new SimpleStringProperty();
@@ -118,11 +110,22 @@ public class FicheSectionRapport extends AbstractSectionRapport {
         return null;
     }
 
+    /**
+     * 
+     * @param ctx
+     * @throws Exception 
+     */
     @Override
     public void printSection(final PrintContext ctx) throws Exception {
-        if (ctx.elements == null && ctx.filterValues == null) {
+        
+        if (ctx.elements == null && ctx.queryResult == null) {
             return;
         }
+        
+        
+        /*
+        A- récupération du modèle de fiche
+        =================================*/
 
         // Find ODT template
         if (modeleElementId.get() == null)
@@ -135,6 +138,11 @@ public class FicheSectionRapport extends AbstractSectionRapport {
             throw new IllegalStateException("No ODT template available.");
         }
 
+        
+        /*
+        B- détermination des éléments à imprimer
+        =======================================*/
+        
         final Iterator iterator;
         if (ctx.elements != null) {
             // Print only elements managed by underlying model.
@@ -147,7 +155,7 @@ public class FicheSectionRapport extends AbstractSectionRapport {
             }
         } else {
             // No elements available. Print filter values.
-            iterator = ctx.filterValues.iterator();
+            iterator = ctx.queryResult.iterator();
         }
 
         /**
@@ -169,12 +177,11 @@ public class FicheSectionRapport extends AbstractSectionRapport {
 
                 // Forced to do it to avoid variable erasing at concatenation
                 final Map<String, List<Text>> replaced = ODTUtils.replaceUserVariablesWithText(doc);
-                final int nbPhotosToPrint = nbPhotos.get();
 
                 ODTUtils.append(ctx.target, doc);
-                
+
                 if (isElement) {
-                    printPhotos(ctx.target, (Element)first, nbPhotosToPrint);
+                    printPhotos(ctx.target, (Element)first, nbPhotos);
                 }
 
                 // For next elements, we replace directly text attributes we've put instead of variables, to avoid reloading original template.
@@ -188,7 +195,7 @@ public class FicheSectionRapport extends AbstractSectionRapport {
 
                         ODTUtils.append(ctx.target, doc);
                         if (isElement) {
-                            printPhotos(ctx.target, (Element)next, nbPhotosToPrint);
+                            printPhotos(ctx.target, (Element)next, nbPhotos);
                         }
                     } catch (RuntimeException ex) {
                         throw ex;
@@ -201,19 +208,28 @@ public class FicheSectionRapport extends AbstractSectionRapport {
     }
 
     private static void printPhotos(final TextDocument holder, final Element source, int nbPhotosToPrint) {
-        if (nbPhotosToPrint > 0 && source instanceof AvecPhotos) {
-            final List<? extends AbstractPhoto> photos = ((AvecPhotos<? extends AbstractPhoto>) source).getPhotos();
-            photos.sort(new PhotoComparator());
-
-            AbstractPhoto photo;
-            for (int i = 0; i < nbPhotosToPrint && i < photos.size(); i++) {
-                photo = photos.get(i);
-                try {
-                    ODTUtils.appendImage(holder, null, photo, false);
-                } catch (IllegalArgumentException e) {
-                    holder.addParagraph("Impossible de retrouver l'image ".concat(photo.getChemin()));
-                }
+        if (nbPhotosToPrint > 0) {
+            final Stream<? extends AbstractPhoto> photos;
+            if (source instanceof AvecPhotos) {
+                photos = ((AvecPhotos<? extends AbstractPhoto>) source).getPhotos().stream()
+                        ;
+            } else if (source instanceof Desordre) {
+                photos = ((Desordre) source).observations.stream()
+                        .flatMap(obs -> obs.getPhotos() == null? Stream.empty() : obs.getPhotos().stream());
+            } else {
+                return;
             }
+
+            photos
+                    .sorted(new PhotoComparator())
+                    .limit(nbPhotosToPrint)
+                    .forEachOrdered(photo -> {
+                        try {
+                            ODTUtils.appendImage(holder, null, photo, false);
+                        } catch (IllegalArgumentException e) {
+                            holder.addParagraph("Impossible de retrouver l'image ".concat(photo.getChemin()));
+                        }
+                    });
         }
     }
 

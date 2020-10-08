@@ -29,6 +29,7 @@ import javafx.scene.control.TabPane;
  */
 public class FXMapTab extends Tab {
     
+    // TabPane auquel se raccrocher…
     private final TabPane tabs;
     private final FXMapPane map;
 

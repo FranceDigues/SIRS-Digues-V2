@@ -141,6 +141,7 @@ public class RapportsPane extends BorderPane {
     @FXML private Label uiProgressLabel;
     @FXML private BorderPane uiListPane;
     @FXML private BorderPane uiEditorPane;
+    @FXML private CheckBox uiPeriod;
 
     private final BooleanProperty running = new SimpleBooleanProperty(false);
 
@@ -171,12 +172,25 @@ public class RapportsPane extends BorderPane {
         uiGrid.add(uiPrDebut, 1, 3);
         uiGrid.add(uiPrFin, 3, 3);
 
-        final LocalDate date = LocalDate.now();
-        uiPeriodeDebut.valueProperty().set(date.minus(10, ChronoUnit.YEARS));
-        uiPeriodeFin.valueProperty().set(date);
+        uiPeriod.selectedProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue) {
+                final LocalDate date = LocalDate.now();
+                if (uiPeriodeDebut.getValue() == null) {
+                    uiPeriodeDebut.valueProperty().set(date.minus(10, ChronoUnit.YEARS));
+                }
+                if (uiPeriodeFin.getValue() == null) {
+                    uiPeriodeFin.setValue(date);
+                }
+            }
+        });
+
+        uiPeriodeDebut.disableProperty().bind(uiPeriod.selectedProperty().not());
+        uiPeriodeDebut.editableProperty().bind(uiPeriod.selectedProperty());
+        uiPeriodeFin.disableProperty().bind(uiPeriod.selectedProperty().not());
+        uiPeriodeFin.editableProperty().bind(uiPeriod.selectedProperty());
         DatePickerConverter.register(uiPeriodeDebut);
         DatePickerConverter.register(uiPeriodeFin);
-        
+
         uiSystemEndiguement.valueProperty().addListener(this::systemeEndiguementChange);
         uiTroncons.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         uiTroncons.getSelectionModel().getSelectedItems().addListener(this::tronconSelectionChange);
@@ -246,29 +260,50 @@ public class RapportsPane extends BorderPane {
         }
     }
 
+    /**
+     * Méthode de génération du rapport.
+     *
+     * @param event
+     */
     @FXML
     private void generateReport(ActionEvent event) {
         final ModeleRapport report = modelProperty.get();
         if (report == null) return;
 
+        /*
+        A- détermination de l'emplacement du fichier de sortie
+        ======================================================*/
+
         final FileChooser chooser = new FileChooser();
         final Path previous = getPreviousPath();
         if (previous != null) {
             chooser.setInitialDirectory(previous.toFile());
+            chooser.setInitialFileName(".odt");
         }
         final File file = chooser.showSaveDialog(null);
         if(file==null) return;
 
         final Path output = file.toPath();
         setPreviousPath(output.getParent());
+
+
+
+        /*
+        B- détermination des paramètres de création de l'obligation réglementaire, le cas échéant
+        =========================================================================================*/
+
         final RefTypeObligationReglementaire typeObligation = uiTypeObligation.valueProperty().get();
         final RefEtapeObligationReglementaire typeEtape = uiTypeEtape.valueProperty().get();
         final Preview sysEndi = uiSystemEndiguement.valueProperty().get();
         final String titre = uiTitre.getText();
 
-        // Filters
-        final LocalDate periodeDebut = uiPeriodeDebut.getValue();
-        final LocalDate periodeFin = uiPeriodeFin.getValue();
+
+        /*
+        C- détermination des paramètres de filtrage des éléments sur le tronçon
+        ======================================================================*/
+
+        final LocalDate periodeDebut = uiPeriod.isSelected() ? uiPeriodeDebut.getValue() : null;
+        final LocalDate periodeFin = uiPeriod.isSelected() ? uiPeriodeFin.getValue() : null;
         final NumberRange dateRange;
         if (periodeDebut == null && periodeFin == null) {
             dateRange = null;
@@ -287,12 +322,22 @@ public class RapportsPane extends BorderPane {
             prRange = NumberRange.create(Math.min(prDebut, prFin), true, Math.max(prDebut, prFin), true);
         }
 
+
+        /*
+        D- création de la tâche générale de création du rapport
+        ======================================================*/
+
         final Task task;
         task = new Task() {
 
             @Override
             protected Object call() throws Exception {
                 updateTitle("Création d'un rapport");
+
+
+                /*
+                1- détermination de la liste des éléments à inclure dans le rapport
+                ------------------------------------------------------------------*/
 
                 // on liste tous les elements a générer
                 updateMessage("Recherche des objets du rapport...");
@@ -333,12 +378,22 @@ public class RapportsPane extends BorderPane {
                     }
                 }
 
+
+                /*
+                2- génération du rapport
+                -----------------------*/
+
                 final Task reportGenerator = ODTUtils.generateReport(report, troncons.isEmpty()? null : elements, output, titre);
                 Platform.runLater(() -> {
                     reportGenerator.messageProperty().addListener((obs, oldValue, newValue) -> updateMessage(newValue));
                     reportGenerator.workDoneProperty().addListener((obs, oldValue, newValue) -> updateProgress(newValue.doubleValue(), reportGenerator.getTotalWork()));
                 });
                 reportGenerator.get();
+
+
+                /*
+                3- création de l'obligation réglementaire
+                ----------------------------------------*/
 
                 updateProgress(-1, -1);
                 if (uiCreateObligation.isSelected()) {
@@ -350,17 +405,20 @@ public class RapportsPane extends BorderPane {
                     final LocalDate date = LocalDate.now();
                     obligation.setAnnee(date.getYear());
                     obligation.setLibelle(titre);
-                    if (sysEndi != null)
+                    if (sysEndi != null){
                         obligation.setSystemeEndiguementId(sysEndi.getElementId());
-                    if (typeObligation != null)
+                    }
+                    if (typeObligation != null){
                         obligation.setTypeId(typeObligation.getId());
+                    }
                     rep.add(obligation);
 
                     final EtapeObligationReglementaire etape = eorr.create();
                     etape.setDateRealisation(date);
                     etape.setObligationReglementaireId(obligation.getId());
-                    if (typeEtape != null)
+                    if (typeEtape != null){
                         etape.setTypeEtapeId(typeEtape.getId());
+                    }
                     eorr.add(etape);
                 }
                 return true;

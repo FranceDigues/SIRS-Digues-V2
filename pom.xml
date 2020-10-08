@@ -18,7 +18,7 @@
   <organization>
     <name>Geomatys</name>
   </organization>
-  
+
   <!-- =========================================================== -->
   <!-- Global project parameters -->
   <!-- =========================================================== -->
@@ -26,7 +26,7 @@
     <!-- Define parent projects versions -->
     <slf4j.version>1.7.7</slf4j.version>
     <sis.version>0.8-jdk7-M1</sis.version>
-    <geotoolkit.version>4.0.0</geotoolkit.version>
+    <geotoolkit.version>4.0.5</geotoolkit.version>
     <geotoolkit.esri.version>2.0.0-MC0004</geotoolkit.esri.version>
     <geotoolkit.h2.version>2.0.0-MC0004</geotoolkit.h2.version>
     <jai.version>1.1.4</jai.version>
@@ -36,8 +36,8 @@
     <spring.version>4.1.0.RELEASE</spring.version>
     <ektorp.version>1.4.4</ektorp.version>
   </properties>
-  
-  
+
+
   <!-- External dependencies inherited by all modules. -->
   <dependencies>
       <dependency>
@@ -50,21 +50,21 @@
       <artifactId>slf4j-api</artifactId>
       <version>${slf4j.version}</version>
     </dependency>
-    
+
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>jcl-over-slf4j</artifactId>
       <version>${slf4j.version}</version>
     </dependency>
-    
-    
+
+
     <dependency>
 	<groupId>org.slf4j</groupId>
 	<artifactId>jul-to-slf4j</artifactId>
 	<version>${slf4j.version}</version>
     </dependency>
-    
-    
+
+
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
@@ -74,9 +74,9 @@
   </dependencies>
 
 
-  <!-- Optional dependencies. These dependencies are not automatically inherited 
-    by parameters modules. But if a child module declare one of those dependencies 
-    without specifying any number of version, then the version by default will 
+  <!-- Optional dependencies. These dependencies are not automatically inherited
+    by parameters modules. But if a child module declare one of those dependencies
+    without specifying any number of version, then the version by default will
     be the one declared below. -->
   <dependencyManagement>
     <dependencies>
@@ -100,7 +100,7 @@
         <artifactId>pdfbox</artifactId>
         <version>1.8.9</version>
       </dependency>
-      <!-- Force newer version of controlsfx to avoid jre version checking error --> 
+      <!-- Force newer version of controlsfx to avoid jre version checking error -->
       <dependency>
           <groupId>org.controlsfx</groupId>
           <artifactId>controlsfx</artifactId>
@@ -111,11 +111,11 @@
 
 
 
-  <!-- Repositories where to find dependencies. A directory http://*.maven.org/ 
-    is implicit. One can find the necessary dependencies for Maven itself, and 
-    some usual dependencies as the JDBC driver for PostgreSQL. The directory 
-    "GeotoolKit" contains JARs of GeotoolKit as well as some needed dependencies 
-    for GeotoolKit but not published on the Maven repository, for example the 
+  <!-- Repositories where to find dependencies. A directory http://*.maven.org/
+    is implicit. One can find the necessary dependencies for Maven itself, and
+    some usual dependencies as the JDBC driver for PostgreSQL. The directory
+    "GeotoolKit" contains JARs of GeotoolKit as well as some needed dependencies
+    for GeotoolKit but not published on the Maven repository, for example the
     UCAR library for the reading of NetCDF files. -->
   <repositories>
     <repository>
@@ -142,13 +142,13 @@
     </pluginRepository>
   </pluginRepositories>
 
-  <!-- Configuration of the compiler and archiver. For each JAR file, an 
-    entry "class-path" will be added in "META-INF/MANIFEST.MF" with the list 
-    of every used dependencies. Furthermore, these dependencies will be copied 
-    in the directory "target/binaries" for convenience (this task is done by 
-    an owned Geotools' plugin). These combined functionnalites allow to launch 
-    an application easily by specifying the final JAR, without specifying any 
-    dependencies in the "classpath". http://maven.apache.org/plugins/index.html 
+  <!-- Configuration of the compiler and archiver. For each JAR file, an
+    entry "class-path" will be added in "META-INF/MANIFEST.MF" with the list
+    of every used dependencies. Furthermore, these dependencies will be copied
+    in the directory "target/binaries" for convenience (this task is done by
+    an owned Geotools' plugin). These combined functionnalites allow to launch
+    an application easily by specifying the final JAR, without specifying any
+    dependencies in the "classpath". http://maven.apache.org/plugins/index.html
     http://repo1.maven.org/maven2/org/apache/maven/plugins/ -->
   <build>
     <pluginManagement>
@@ -177,6 +177,11 @@
           <groupId>fr.sirs.maven</groupId>
           <artifactId>gen-maven-plugin</artifactId>
           <version>2.x-SNAPSHOT</version>
+        <configuration>
+            <bundleArguments>
+                <installdirChooser>true</installdirChooser>
+            </bundleArguments>
+        </configuration>
         </plugin>
       </plugins>
     </pluginManagement>
@@ -216,13 +221,13 @@
           </execution>
         </executions>
       </plugin>
-      
+
       <!-- Force jar packager to properly set META-INF version as maven project. -->
       <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
           <configuration>
-              <archive>                   
+              <archive>
                   <manifest>
                       <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                       <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
@@ -230,7 +235,7 @@
               </archive>
           </configuration>
       </plugin>
-      
+
     </plugins>
 
 

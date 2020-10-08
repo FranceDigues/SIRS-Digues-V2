@@ -20,10 +20,17 @@ package fr.sirs.theme.ui;
 
 import fr.sirs.Injector;
 import fr.sirs.SIRS;
+import fr.sirs.Session;
 import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.model.DesordreLit;
+import fr.sirs.core.model.Preview;
 import fr.sirs.core.model.RefCategorieDesordre;
+import fr.sirs.core.model.RefCote;
+import fr.sirs.core.model.RefPosition;
+import fr.sirs.core.model.RefSource;
 import fr.sirs.core.model.RefTypeDesordre;
+import fr.sirs.core.model.TronconDigue;
+import fr.sirs.core.model.TronconLit;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;

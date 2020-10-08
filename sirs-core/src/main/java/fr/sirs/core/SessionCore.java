@@ -56,6 +56,9 @@ import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.logging.Level;
+import javafx.beans.binding.BooleanBinding;
+import javafx.beans.binding.ObjectBinding;
+import javafx.beans.binding.StringBinding;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyBooleanWrapper;
@@ -115,22 +118,117 @@ public class SessionCore implements ApplicationContextAware {
      */
     public ReadOnlyBooleanProperty geometryEditionProperty() {return geometryEditionProperty.getReadOnlyProperty();}
 
+    /**
+     *
+     * @deprecated {@link SessionCore#validDocuments().not()}
+     */
+    @Deprecated
     private final ReadOnlyBooleanWrapper needValidationProperty = new ReadOnlyBooleanWrapper(true);
     /**
      *
      * @return A flag indicating if current user's work must be marked as 'not
      * validated yet'. It means that this user won't be able to modify any data
      * already validated, and it won't be able to edit work of other users.
+     * @deprecated {@link SessionCore#createValidDocuments().not()}
      */
+    @Deprecated
     public ReadOnlyBooleanProperty needValidationProperty() {return needValidationProperty;}
 
+    /**
+     * @deprecated Utiliser {@link SessionCore#roleBinding() }
+     */
+    @Deprecated
     private final ReadOnlyObjectWrapper<Role> role = new ReadOnlyObjectWrapper<>();
 
+    /**
+     * @deprecated Utiliser {@link SessionCore#roleBinding() }
+     */
+    @Deprecated
     public ReadOnlyObjectProperty<Role> roleProperty() {
         return role.getReadOnlyProperty();
     }
 
+    /**
+     * @deprecated Utiliser {@link SessionCore#roleBinding() }
+     */
+    @Deprecated
     public Role getRole(){return role.get();}
+
+    private final ObjectBinding<Role> roleBinding = new ObjectBinding<Role>(){
+
+        {
+            bind(utilisateurProperty);
+        }
+
+        @Override
+        protected Role computeValue() {
+            if(utilisateurProperty.get()==null) return null;
+            return utilisateurProperty.get().getRole();
+        }
+    };
+
+    /**
+     * @return un binding indiquant le rôle de l'utilisateur
+     */
+    public ObjectBinding<Role> roleBinding(){return roleBinding;}
+
+
+    private final BooleanBinding adminOrUserOrExtern = new BooleanBinding() {
+
+        {
+            bind(roleBinding);
+        }
+
+        @Override
+        protected boolean computeValue() {
+            final Role userRole = roleBinding.get();
+            return Role.ADMIN.equals(userRole)
+                    || Role.USER.equals(userRole)
+                    || Role.EXTERN.equals(userRole);
+        }
+    };
+
+    /**
+     * @return un binding booléen indiquant si l'utilisateur connecté est administrateur, utilisateur ou externe
+     */
+    public BooleanBinding adminOrUserOrExtern(){return adminOrUserOrExtern;}
+
+    private final StringBinding userIdBinding = new StringBinding() {
+        {
+            bind(utilisateurProperty);
+        }
+
+        @Override
+        protected String computeValue() {
+            if(utilisateurProperty.get()==null) return null;
+            return utilisateurProperty.get().getId();
+        }
+    };
+
+    /**
+     * @return un binding indiquant l'identifiant de l'utilisateur connecté
+     */
+    public StringBinding userIdBinding(){return userIdBinding;}
+
+    private final BooleanBinding createValidDocuments = new BooleanBinding() {
+
+        {
+            bind(roleBinding);
+        }
+
+        @Override
+        protected boolean computeValue() {
+            final Role userRole = roleBinding.get();
+            return Role.ADMIN.equals(userRole) || Role.USER.equals(userRole);
+        }
+    };
+
+    /**
+     *
+     * @return un binding indiquant si l'utilisateur crée des documents déjà valides.
+     * (s'il s'agit d'un administrateur ou d'un utilisateur normal)
+     */
+    public BooleanBinding createValidDocuments() {return createValidDocuments;}
 
     @Autowired
     ElementCreator elementCreator;
@@ -157,7 +255,7 @@ public class SessionCore implements ApplicationContextAware {
      * specific repository, and key is the canonical name of the model class on
      * which the repository works.
      */
-    private final HashMap<String, AbstractSIRSRepository> repositories = new HashMap<>();
+    private final Map<String, AbstractSIRSRepository> repositories = new HashMap<>();
 
     private final Cache<Class<? extends Element>, Collection<AbstractSIRSRepository>> matchingRepositoriesCache = new Cache<>(12, 12, false);
 
@@ -439,7 +537,7 @@ public class SessionCore implements ApplicationContextAware {
         return positionables;
     }
 
-    private static List<Class<? extends Element>> ELEMENT_IMPLS;
+//    private static List<Class<? extends Element>> ELEMENT_IMPLS;
     /**
      * Search in {@link Element} {@link ServiceLoader} for all implementations of
      * a given type.
@@ -702,6 +800,7 @@ public class SessionCore implements ApplicationContextAware {
      * @return True if current session owner can edit it, false otherwise.
      */
     public boolean editionAuthorized(final Element input) {
-        return !needValidationProperty().get() || (!input.getValid() && getUtilisateur().getId().equals(input.getAuthor()));
+        // les utilisateurs qui peuvent éditer un élément sont ceux qui peuvent en créer de valides OU ceux qui sont l'auteur d'un document invalide.
+        return createValidDocuments().get() || (!input.getValid() && getUtilisateur().getId().equals(input.getAuthor()));
     }
 }

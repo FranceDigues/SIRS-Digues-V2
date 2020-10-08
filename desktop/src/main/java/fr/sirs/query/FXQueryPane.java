@@ -20,6 +20,7 @@ package fr.sirs.query;
 
 import fr.sirs.SIRS;
 import fr.sirs.core.model.SQLQuery;
+import javafx.beans.binding.ObjectBinding;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -27,14 +28,16 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
 
 /**
  *
  * @author Johann Sorel (Geomatys)
  * @author Alexis Manin (Geomatys)
  */
-public class FXQueryPane extends GridPane {
+public class FXQueryPane extends VBox {
 
     @FXML private TextArea uiDesc;
     @FXML private TextArea uiSql;
@@ -50,9 +53,38 @@ public class FXQueryPane extends GridPane {
     public FXQueryPane(SQLQuery query) {
         SIRS.loadFXML(this);
         setSQLQuery(query);
-        uiDesc.disableProperty().bind(modifiableProperty.not());
-        uiSql.disableProperty().bind(modifiableProperty.not());
-        uiLibelle.disableProperty().bind(modifiableProperty.not());
+        
+        uiLibelle.editableProperty().bind(modifiableProperty());
+        
+        /*
+        Pour permettre la lecture des longues descriptions d'un coup d'œil
+        on branche et on synchronyse un tooltip sur la description.
+        */
+        uiDesc.tooltipProperty().bind(new ObjectBinding<Tooltip>() {
+            
+            {bind(uiDesc.textProperty());}
+            
+            @Override
+            protected Tooltip computeValue() {
+                return new Tooltip(uiDesc.getText());
+            }
+        });
+        uiDesc.editableProperty().bind(modifiableProperty());
+        
+        /*
+        Pour permettre la lecture des longues requêtes d'un coup d'œil
+        on branche et on synchronyse un tooltip sur le texte de la requête.
+        */
+        uiSql.tooltipProperty().bind(new ObjectBinding<Tooltip>() {
+            
+            {bind(uiSql.textProperty());}
+            
+            @Override
+            protected Tooltip computeValue() {
+                return new Tooltip(uiSql.getText());
+            }
+        });
+        uiSql.editableProperty().bind(modifiableProperty());
     }
     
     public SQLQuery getSQLQuery() {

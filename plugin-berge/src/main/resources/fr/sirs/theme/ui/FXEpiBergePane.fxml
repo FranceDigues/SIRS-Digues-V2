@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <?import fr.sirs.theme.ui.*?>
+<?import fr.sirs.util.FXFreeTab?>
 <?import fr.sirs.util.FXFileTextField?>
 <?import fr.sirs.util.FXComponentField?>
 <?import org.geotoolkit.gui.javafx.util.*?>
@@ -163,7 +164,7 @@
         </Tab>
 
 <!-- REFERENCE TABS -->
-        <Tab fx:id="ui_photos" text="%photos"/>
+        <FXFreeTab fx:id="ui_photos" text="%photos"/>
 
       </tabs>
     </TabPane>

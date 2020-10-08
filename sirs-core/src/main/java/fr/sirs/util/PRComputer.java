@@ -118,7 +118,7 @@ public class PRComputer extends Task<Boolean> {
             updateProgress(currentProgress, progressMax);
 
             for (final Objet current : objets) {
-                recomputePositionable(current);
+                recomputePositionable(current); //Calcule et 'setting' Prs dans nouveau sr + geometry (pas de set SR ni calcul coord lin.)
                 if (current instanceof ObjetPhotographiable) {
                     for (final Photo photo : ((ObjetPhotographiable) current).getPhotos()) {
                         recomputePositionable(photo);
@@ -162,6 +162,7 @@ public class PRComputer extends Task<Boolean> {
 
             return true;
         } catch (InterruptedException e) {
+            SirsCore.LOGGER.log(Level.WARNING, "Interruption de la mise à jour des PRS", e);
             Thread.currentThread().interrupt();
             return false;
         }

@@ -11,7 +11,7 @@
 <?import javafx.scene.layout.RowConstraints?>
 <?import javafx.scene.layout.VBox?>
 
-<fx:root type="BorderPane" xmlns="http://javafx.com/javafx/8.0.65" xmlns:fx="http://javafx.com/fxml/1">
+<fx:root type="BorderPane" xmlns="http://javafx.com/javafx/8.0.171" xmlns:fx="http://javafx.com/fxml/1">
    <top>
         <VBox styleClass="pos-top" BorderPane.alignment="CENTER">
             <children>
@@ -42,6 +42,7 @@
                 </GridPane>
             <FlowPane alignment="CENTER" hgap="10.0" vgap="10.0">
                <children>
+                  <Button fx:id="uiRefreshCoord" mnemonicParsing="false" onAction="#refreshSRAndPRInfo" prefHeight="26.0" prefWidth="28.0" styleClass="buttonbar-button" />
                   <Label style="-fx-font-style: italic;" styleClass="label-header" text="SR par défaut :" />
                   <Label fx:id="uiSR" styleClass="label-header" />                    
                           <Label alignment="BASELINE_LEFT" styleClass="label-header" text="PR de début :" />

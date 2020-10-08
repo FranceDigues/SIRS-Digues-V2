@@ -34,11 +34,6 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
-/**
- * Exemple de bouton de plugins
- *
- * @author Cédric Briançon (Geomatys)
- */
 public final class DocumentExportTheme extends AbstractPluginsButtonTheme {
 
     private static final Image ICON = new Image(DocumentExportTheme.class.getResourceAsStream("documentExport.png"));

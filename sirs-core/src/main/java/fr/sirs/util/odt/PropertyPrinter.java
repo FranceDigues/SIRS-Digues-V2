@@ -18,12 +18,16 @@
  */
 package fr.sirs.util.odt;
 
+import fr.sirs.core.SirsCore;
+import fr.sirs.core.model.Element;
 import java.beans.PropertyDescriptor;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.logging.Level;
 import org.apache.sis.util.ArgumentChecks;
 import org.opengis.feature.Feature;
 
@@ -46,10 +50,21 @@ public abstract class PropertyPrinter {
         if (acceptedProperties == null) {
             properties = Collections.singleton(first);
         } else {
-            final HashSet tmpSet = new HashSet<String>(acceptedProperties.length+1);
+            final Set tmpSet = new HashSet<>(acceptedProperties.length+1);
             tmpSet.add(first);
             tmpSet.addAll(Arrays.asList(acceptedProperties));
             properties = Collections.unmodifiableSet(tmpSet);
+        }
+    }
+
+    public String print(final Element source, final String property, Function<Element, String> mapping) throws ReflectiveOperationException {
+        ArgumentChecks.ensureNonNull("Object holding property to print", source);
+        ArgumentChecks.ensureNonNull("Descriptor for the property to print", property);
+        SirsCore.LOGGER.log(Level.INFO, "request printing pseudo property {0}", property);
+        if (properties.contains(property)) {
+            return mapping.apply(source);
+        } else {
+            throw new IllegalArgumentException("Given property name is not handled by current printer : "+property);
         }
     }
 

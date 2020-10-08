@@ -25,12 +25,14 @@ import org.geotoolkit.gui.javafx.util.TaskManager;
 import fr.sirs.core.model.TronconDigue;
 import fr.sirs.core.TronconUtils;
 import fr.sirs.core.component.AbstractSIRSRepository;
+import fr.sirs.core.model.AvecBornesTemporelles;
 import fr.sirs.ui.Growl;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -73,11 +75,11 @@ public class FXTronconMerge extends VBox {
         this.maleGender = maleGender;
 
         if (maleGender) {
-            infoLabel.setText("Nom du " + typeName + " résultant de la fusion :");
+            nameLabel.setText("Nom du " + typeName + " résultant de la fusion :");
         } else {
-            infoLabel.setText("Nom de la " + typeName + " résultante de la fusion :");
+            nameLabel.setText("Nom de la " + typeName + " résultante de la fusion :");
         }
-        nameLabel.setText("Les " + typeName + "s avant fusion seront archivés.");
+        infoLabel.setText("Les " + typeName + "s avant fusion seront archivés.");
         final TableColumn<TronconDigue,String> col = new TableColumn<>("Nom");
         col.setEditable(false);
         col.setCellValueFactory((TableColumn.CellDataFeatures<TronconDigue, String> param) -> param.getValue().libelleProperty());
@@ -185,9 +187,13 @@ public class FXTronconMerge extends VBox {
             }
 
             // Merge succeeded, we must now archive old ones.
+            final LocalDate archiveDate = LocalDate.now().minusDays(1);
             final Iterator<TronconDigue> it = troncons.iterator();
             while (it.hasNext()) {
-                TronconUtils.archiveSectionWithTemporalObjects(it.next(), session, LocalDate.now().minusDays(1), true);
+                final TronconDigue next = it.next();
+                final Predicate<AvecBornesTemporelles> archiveIf = new AvecBornesTemporelles.ArchivePredicate(archiveDate);
+                TronconUtils.archiveSectionWithTemporalObjects(next, session, archiveDate, archiveIf);
+                TronconUtils.archiveBornes(next.getBorneIds(), session, archiveDate, archiveIf);
             }
 
             return true;

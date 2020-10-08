@@ -19,6 +19,7 @@
 package fr.sirs.util;
 
 import fr.sirs.Injector;
+import fr.sirs.SIRS;
 import fr.sirs.core.SirsCoreRuntimeException;
 import fr.sirs.core.component.Previews;
 import fr.sirs.core.model.Desordre;
@@ -43,6 +44,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.TransformerException;
 import net.sf.jasperreports.engine.JRDataSource;
@@ -89,7 +91,7 @@ public class PrinterUtilities {
     }
 
     ////////////////////////////////////////////////////////////////////////////
-    // FICHES DÉTAILLÉES DE RÉSEAUX HYDRAULIQUES FERMÉS
+    // FICHES DÉTAILLÉES D'OUVRAGE HYDRAULIQUE ASSOCIE
     ////////////////////////////////////////////////////////////////////////////
 
     public static File printOuvrageAssocie(final List<String> avoidReseauFields,
@@ -159,6 +161,7 @@ public class PrinterUtilities {
 
             final JRDomWriterReseauFermeSheet templateWriter = new JRDomWriterReseauFermeSheet(metaTemplateStream,
                     avoidReseauFields, observationFields, reseauFields, desordreFields, printPhoto, printReseauOuvrage);
+            
             templateWriter.setOutput(templateFile);
             templateWriter.write();
 
@@ -516,17 +519,24 @@ JasperViewer.viewReport(jp1,false);
         if(lin1==null && lin2==null) return 0; // Ne devrait jamais se produire pour un objet.
         else if(lin1==null || lin2==null) return (lin1==null) ? 1 : -1; // Ne devrait jamais se produire pour un objet.
         else {
-            final TronconDigue troncon1 = Injector.getSession().getRepositoryForClass(TronconDigue.class).get(lin1);
-            final TronconDigue troncon2 = Injector.getSession().getRepositoryForClass(TronconDigue.class).get(lin2);
+            try{
+                final TronconDigue troncon1 = Injector.getSession().getRepositoryForClass(TronconDigue.class).get(lin1);
+                final TronconDigue troncon2 = Injector.getSession().getRepositoryForClass(TronconDigue.class).get(lin2);
 
-            if(troncon1==null || troncon2==null)
-                throw new SirsCoreRuntimeException("Un des tronçons est null : "+lin1+" ou "+lin2+".");
+                if(troncon1==null || troncon2==null)
+                    throw new SirsCoreRuntimeException("Un des tronçons est null : "+lin1+" ou "+lin2+".");
 
-            final String des1 = troncon1.getDesignation();
-            final String des2 = troncon2.getDesignation();
-            if(des1==null && des2==null) return 0;
-            else if(des1==null || des2==null) return (des1==null) ? 1 : -1;
-            else return des1.compareTo(des2);
+                final String des1 = troncon1.getDesignation();
+                final String des2 = troncon2.getDesignation();
+                if(des1==null && des2==null) return 0;
+                else if(des1==null || des2==null) return (des1==null) ? 1 : -1;
+                else return des1.compareTo(des2);
+            }
+            catch(IllegalArgumentException e){
+                // SYM-1735 : problème d'impression des fiches de désordres attachés à des berges lorsque le module berges n'est pas chargé
+                SIRS.LOGGER.log(Level.INFO, "un problème a été rencontré lors de la comparaison des tronçons", e);
+                return 0;
+            }
         }
     };
 }

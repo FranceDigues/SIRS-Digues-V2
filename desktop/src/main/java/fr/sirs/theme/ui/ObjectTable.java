@@ -305,7 +305,7 @@ public class ObjectTable extends BorderPane {
         if(!ele.isPresent()){
             setCenter(new Label("Pas d'éditeur disponible pour cet objet"));
         }else{
-            elementPane = SIRS.generateEditionPane(ele.get());
+            elementPane = SIRS.generateEditionPane(ele.get(), SIRS.EDITION_PREDICATE);
             elementPane.elementProperty().set(ele.get());
 
             uiFicheMode.setTooltip(new Tooltip("Passer en mode de tableau synoptique."));
@@ -402,6 +402,4 @@ public class ObjectTable extends BorderPane {
             });
         }
     }
-
-
 }

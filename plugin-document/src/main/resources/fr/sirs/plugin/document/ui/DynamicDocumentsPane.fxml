@@ -26,6 +26,7 @@
                         <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
                      </padding>
                      <top>
+                        <VBox spacing="10">
                         <HBox prefHeight="0.0" BorderPane.alignment="CENTER">
                            <children>
                               <Label maxHeight="1.7976931348623157E308" text="Nom" />
@@ -33,6 +34,15 @@
                               <TextField fx:id="uiDocumentNameField" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" HBox.hgrow="ALWAYS" />
                            </children>
                         </HBox>
+                        <HBox prefHeight="0.0" BorderPane.alignment="CENTER">
+                           <children>
+                                <Label text="Période du :" />
+                                <DatePicker fx:id="uiPeriodeDebut" />
+                                <Label text="au :" />
+                                <DatePicker fx:id="uiPeriodeFin" />
+                           </children>
+                        </HBox>
+                        </VBox>
                      </top>
                      <center>
                         <GridPane BorderPane.alignment="CENTER">

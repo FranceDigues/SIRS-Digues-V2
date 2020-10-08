@@ -28,6 +28,7 @@ import fr.sirs.SIRS;
 import fr.sirs.core.model.AbstractDependance;
 import fr.sirs.core.model.AireStockageDependance;
 import fr.sirs.core.model.AvecGeometrie;
+import fr.sirs.core.model.AvecSettableGeometrie;
 import fr.sirs.core.model.CheminAccesDependance;
 import fr.sirs.core.model.DesordreDependance;
 import fr.sirs.map.FXMapTab;
@@ -78,8 +79,9 @@ import java.util.logging.Level;
  * d'en importer une pour cette dépendance.
  *
  * @author Cédric Briançon (Geomatys)
+ * @param <T>
  */
-public class FXPositionDependancePane<T extends AvecGeometrie> extends BorderPane {
+public class FXPositionDependancePane<T extends AvecSettableGeometrie> extends BorderPane {
     private final BooleanProperty disableFieldsProperty = new SimpleBooleanProperty(true);
 
     @FXML

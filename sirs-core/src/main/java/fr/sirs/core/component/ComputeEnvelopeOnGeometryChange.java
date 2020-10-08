@@ -55,16 +55,28 @@ public class ComputeEnvelopeOnGeometryChange implements ChangeListener<Geometry>
             try {
                 CoordinateReferenceSystem geometryCRS = JTS.findCoordinateReferenceSystem(newValue);
                 if (geometryCRS == null) {
-                    geometryCRS = InjectorCore.getBean(SessionCore.class).getProjection();
+                    SirsCore.LOGGER.log(Level.CONFIG, "Récupération du CRS de la session pour mettre à jour l'enveloppe de géométrie");
+                    final SessionCore session = InjectorCore.getBean(SessionCore.class);
+                    if(session==null){
+                        SirsCore.LOGGER.log(Level.FINE, "La session n'est pas encore disponible dans le contexte d'application");
+                    } else {
+                        geometryCRS = session.getProjection();
+                    }
                 }
-                Envelope envelope2D = JTS.getEnvelope2D(newValue.getEnvelopeInternal(), geometryCRS);
-                if (!Utilities.equalsApproximatively(geometryCRS, CommonCRS.WGS84.normalizedGeographic())) {
-                    envelope2D = Envelopes.transform(envelope2D, CommonCRS.WGS84.normalizedGeographic());
+
+                if (geometryCRS != null) {
+                    SirsCore.LOGGER.log(Level.FINE, "calcul d'une enveloppe de géométrie");
+                    Envelope envelope2D = JTS.getEnvelope2D(newValue.getEnvelopeInternal(), geometryCRS);
+                    if (!Utilities.equalsApproximatively(geometryCRS, CommonCRS.WGS84.normalizedGeographic())) {
+                        envelope2D = Envelopes.transform(envelope2D, CommonCRS.WGS84.normalizedGeographic());
+                    }
+                    target.setLongitudeMin(envelope2D.getMinimum(0));
+                    target.setLongitudeMax(envelope2D.getMaximum(0));
+                    target.setLatitudeMin(envelope2D.getMinimum(1));
+                    target.setLatitudeMax(envelope2D.getMaximum(1));
+                } else {
+                    SirsCore.LOGGER.log(Level.CONFIG, "Aucun CRS trouvé pour mettre à jour l'enveloppe de géométrie");
                 }
-                target.setLongitudeMin(envelope2D.getMinimum(0));
-                target.setLongitudeMax(envelope2D.getMaximum(0));
-                target.setLatitudeMin(envelope2D.getMinimum(1));
-                target.setLatitudeMax(envelope2D.getMaximum(1));
             } catch (Exception e) {
                 SirsCore.LOGGER.log(Level.WARNING, "Cannot compute CRS:84 envelope.", e);
             }

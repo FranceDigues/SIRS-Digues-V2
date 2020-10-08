@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -20,20 +20,18 @@ package fr.sirs.plugin.reglementaire.ui;
 
 import fr.sirs.Injector;
 import fr.sirs.core.component.ObligationReglementaireRepository;
-import fr.sirs.core.component.SystemeEndiguementRepository;
 import fr.sirs.core.model.Element;
 import fr.sirs.core.model.ObligationReglementaire;
 import fr.sirs.theme.ui.PojoTable;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
-import javafx.geometry.Pos;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.image.ImageView;
 import javafx.util.Callback;
 import org.geotoolkit.gui.javafx.util.ButtonTableCell;
-import org.geotoolkit.gui.javafx.util.FXTableCell;
 import org.geotoolkit.internal.GeotkFX;
 
 /**
@@ -48,8 +46,8 @@ public final class ObligationsPojoTable extends PojoTable {
     /**
      * Création de la table présentant les obligations réglementaires.
      */
-    public ObligationsPojoTable() {
-        super(ObligationReglementaire.class, "Liste des obligations réglementaires");
+    public ObligationsPojoTable(final ObjectProperty<? extends Element> container) {
+        super(ObligationReglementaire.class, "Liste des obligations réglementaires", container);
 
         // Ajout de la colonne de duplication
         getColumns().add(2, new DuplicateObligationColumn());

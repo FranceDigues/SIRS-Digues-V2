@@ -41,7 +41,7 @@
                         <ProgressIndicator prefHeight="20.0" visible="false" />
                      </graphic>
                   </Label>
-                  <Label text="Nombre de photos à importer (pour chaque objet sur les tronçons sélectionnés)" GridPane.columnSpan="2147483647" GridPane.rowIndex="2">
+                  <Label text="Nombre de photos à exporter (pour chaque objet sur les tronçons sélectionnés)" GridPane.columnSpan="2147483647" GridPane.rowIndex="2">
                      <GridPane.margin>
                         <Insets top="10.0" />
                      </GridPane.margin>

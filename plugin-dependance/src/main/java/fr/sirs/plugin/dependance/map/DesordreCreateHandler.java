@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -74,6 +74,13 @@ import static javafx.scene.control.ButtonType.NO;
 import static javafx.scene.control.ButtonType.YES;
 
 /**
+ * {@link AbstractNavigationHandler} permettant le contrôle les actions
+ * possibles pour le bouton d'édition et de modification de dépendances sur la
+ * carte.
+ *
+ * Note : appelée dans l'application Sirs depuis le {@link ToggleButton} sur la
+ * carte. Pourrait être regroupé avec {@link DesordreEditHandler}.
+ *
  * @author Cédric Briançon (Geomatys)
  */
 public class DesordreCreateHandler extends AbstractNavigationHandler {

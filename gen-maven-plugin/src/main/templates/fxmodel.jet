@@ -88,14 +88,14 @@ if(helper.isAbstract()){
 ////////////////////////////////////////////////////////////////////////////////
 
 /**
-Implémentation des constructeurs.
+Implï¿½mentation des constructeurs.
 
-=> Pour la classe Positionable, on implémente un constructeur spécifique permettant
-de gérer la géométrie.
+=> Pour la classe Positionable, on implï¿½mente un constructeur spï¿½cifique permettant
+de gï¿½rer la gï¿½omï¿½trie.
 
-=> Pour les autres classes, on implémente un constructeur uniquement si la classe
-est concrète. Le constructeur est déprécié de manière à alerter sur son usage afin 
-de passer préférentiellement par les outils de l'application destinés à la création
+=> Pour les autres classes, on implï¿½mente un constructeur uniquement si la classe
+est concrï¿½te. Le constructeur est dï¿½prï¿½ciï¿½ de maniï¿½re ï¿½ alerter sur son usage afin 
+de passer prï¿½fï¿½rentiellement par les outils de l'application destinï¿½s ï¿½ la crï¿½ation
 des instances.
 */
 if (Helper.POSITIONABLE_CLASS_NAME.equals(helper.getClassName())) {
@@ -344,7 +344,17 @@ else if (!helper.isInterface()) {
         return parent.get().getCouchDBDocument();
     }
 <%
-    } 
+    } else {
+%>
+
+    @Override
+    @Internal    
+    @JsonIgnore
+    public String getDocumentId(){
+        return documentId;
+    }
+<%
+    }
 %>
    
     private String documentId;
@@ -403,7 +413,7 @@ Write attributes and FX accessors for model attributes.
 */
 for(final EAttribute att : helper.getEAttributes()){
     /*
-    Pour les attributs qui sont des listes, on ne génère pas d'attribut JavaFX
+    Pour les attributs qui sont des listes, on ne gï¿½nï¿½re pas d'attribut JavaFX
     mais de simples listes.
     */
     if(att.isMany()){
@@ -415,7 +425,7 @@ for(final EAttribute att : helper.getEAttributes()){
 <%
     } 
     /*
-    Pour les attributs de cardinalité 1, on génère des attributs JavaFX
+    Pour les attributs de cardinalitï¿½ 1, on gï¿½nï¿½re des attributs JavaFX
     */
     else {
 %>
@@ -612,7 +622,7 @@ for(final EReference eRef : helper.getEReferences()) {
     }
     else {
 
-        // CAS DES INTERFACES : PAS D'IMPLÉMENTATION MAIS SIMPLE DÉCLARATION
+        // CAS DES INTERFACES : PAS D'IMPLï¿½MENTATION MAIS SIMPLE Dï¿½CLARATION
         if(helper.isInterface()){
             if (eRef.isMany() ) {
     %> 

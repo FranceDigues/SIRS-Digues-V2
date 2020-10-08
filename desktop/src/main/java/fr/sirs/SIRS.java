@@ -29,6 +29,7 @@ import fr.sirs.core.component.AbstractSIRSRepository;
 import fr.sirs.core.model.Element;
 import fr.sirs.theme.ui.AbstractFXElementPane;
 import fr.sirs.theme.ui.FXElementContainerPane;
+import fr.sirs.theme.ui.columns.TableColumnsPreferences;
 import fr.sirs.util.FXPreferenceEditor;
 import fr.sirs.util.ReferenceTableCell;
 import fr.sirs.util.SirsStringConverter;
@@ -71,6 +72,7 @@ import javafx.scene.image.Image;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import javafx.util.Callback;
+import javafx.util.StringConverter;
 import org.apache.sis.referencing.CommonCRS;
 import org.apache.sis.util.ArgumentChecks;
 import org.apache.sis.util.collection.Cache;
@@ -100,9 +102,13 @@ public final class SIRS extends SirsCore {
         JTS.setCRS(DEFAULT_TRONCON_GEOM_WGS84, CRS_WGS84);
     }
 
+    public static final String COLOR_INVALID_ICON = "#aa0000";
+    public static final String COLOR_VALID_ICON = "#00aa00";
+
     public static final Image ICON = new Image(SirsCore.class.getResource("/fr/sirs/icon.png").toString());
 
     public static final Image ICON_ADD_WHITE    = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_PLUS,22,Color.WHITE),null);
+    public static final Image ICON_CHAIN_WHITE    = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_CHAIN_ALIAS,22,Color.WHITE),null);
     public static final Image ICON_COPY_WHITE   = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_COPY_ALIAS,22,Color.WHITE),null);
     public static final Image ICON_ADD_BLACK    = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_PLUS,16,Color.BLACK),null);
     public static final Image ICON_ARROW_RIGHT_BLACK = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_ARROW_RIGHT,16,Color.BLACK),null);
@@ -124,6 +130,7 @@ public final class SIRS extends SirsCore {
     public static final Image ICON_EYE_BLACK = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_EYE, 16, Color.BLACK),null);
     public static final Image ICON_COMPASS_WHITE = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_COMPASS, 22, Color.WHITE),null);
     public static final Image ICON_EDIT_BLACK = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_FILE_O, 16, Color.BLACK),null);
+    public static final Image ICON_EDITION = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_EDIT_ALIAS, 16, Color.BLACK),null);
     public static final Image ICON_PRINT_BLACK = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_PRINT, 16, Color.BLACK),null);
     public static final Image ICON_ROTATE_LEFT_ALIAS = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_ROTATE_LEFT_ALIAS, 16, Color.BLACK),null);
     public static final Image ICON_IMPORT_WHITE  = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_DOWNLOAD,22,Color.WHITE),null);
@@ -131,9 +138,7 @@ public final class SIRS extends SirsCore {
     public static final Image ICON_VIEWOTHER_WHITE  = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_BARS,22,Color.WHITE),null);
     public static final Image ICON_FILTER_WHITE = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_FILTER,22,Color.WHITE),null);
 
-    public static final String COLOR_INVALID_ICON = "#aa0000";
     public static final Image ICON_EXCLAMATION_CIRCLE = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_EXCLAMATION_CIRCLE, 16, Color.decode(COLOR_INVALID_ICON)),null);
-    public static final String COLOR_VALID_ICON = "#00aa00";
     public static final Image ICON_CHECK_CIRCLE = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_CHECK_CIRCLE, 16, Color.decode(COLOR_VALID_ICON)),null);
     public static final String COLOR_WARNING_ICON = "#EEB422";
     public static final Image ICON_EXCLAMATION_TRIANGLE = SwingFXUtils.toFXImage(IconBuilder.createImage(FontAwesomeIcons.ICON_EXCLAMATION_TRIANGLE, 16, Color.decode(COLOR_WARNING_ICON)),null);
@@ -161,7 +166,7 @@ public final class SIRS extends SirsCore {
      * as possible.
      */
     private static final Cache<String, Image> IMAGE_CACHE = new Cache<>(16, 0, false);
-    
+
     public static final Predicate<Element> CONSULTATION_PREDICATE = e -> false;
     public static final Predicate<Element> EDITION_PREDICATE = e -> true;
 
@@ -266,7 +271,7 @@ public final class SIRS extends SirsCore {
             return observableList(repo.get(sourceList));
         }
     }
-    
+
 
     /**
      * Tente de trouver un éditeur d'élément compatible avec l'objet passé en paramètre.
@@ -323,7 +328,18 @@ public final class SIRS extends SirsCore {
      * @param current the element to select by default.
      */
     public static void initCombo(final ComboBox comboBox, final ObservableList items, final Object current) {
-        final SirsStringConverter converter = new SirsStringConverter();
+        initCombo(comboBox, items, current, new SirsStringConverter());
+    }
+
+    /**
+     * initialize ComboBox items using input list. We also activate completion.
+     * @param comboBox The combo box to set value on.
+     * @param items The items we want into the ComboBox.
+     * @param current the element to select by default.
+     * @param converter the StringConverter to use to identify the items.
+     */
+    public static void initCombo(final ComboBox comboBox, final ObservableList items, final Object current, final StringConverter converter) {
+        ArgumentChecks.ensureNonNull("items", items);
         comboBox.setConverter(converter);
         if (items instanceof SortedList) {
             comboBox.setItems(items);
@@ -495,11 +511,16 @@ public final class SIRS extends SirsCore {
      * @return Listener attached to given table to manage its column sizes.
      */
     public static InvalidationListener setColumnResize(final TableView target) {
-        final ColumnAutomaticResize resize = new ColumnAutomaticResize(target);
+        return setColumnResize(target, null);
+    }
+
+
+
+    public static InvalidationListener setColumnResize(final TableView target, final TableColumnsPreferences preferences) {
+        final ColumnAutomaticResize resize = new ColumnAutomaticResize(target, preferences);
         target.widthProperty().addListener(resize);
         return resize;
     }
-
     /**
      * An invalidation listener to put on a table width property to set its column's
      * preferred size to fill entire width.
@@ -507,9 +528,15 @@ public final class SIRS extends SirsCore {
     private static class ColumnAutomaticResize implements InvalidationListener {
 
         private final WeakReference<TableView> target;
+        private final WeakReference<TableColumnsPreferences> preferences;
 
         public ColumnAutomaticResize(TableView target) {
+            this(target, null);
+        }
+
+        public ColumnAutomaticResize(TableView target, final TableColumnsPreferences preferences) {
             this.target = new WeakReference<>(target);
+            this.preferences = new WeakReference<>(preferences);
         }
 
         @Override
@@ -517,11 +544,16 @@ public final class SIRS extends SirsCore {
             final TableView<?> tView = target.get();
             if (tView == null)
                 return;
+            final TableColumnsPreferences pref = preferences.get();
+            final boolean notNull = pref != null;
 
             double unresizable = 0;
             final ArrayList<TableColumn> resizableColumns = new ArrayList<>();
             for (final TableColumn col : tView.getColumns()) {
-                if (!col.isResizable()) {
+                if (!col.isResizable() || (notNull && (pref.withPreferences(tView.getColumns().indexOf(col))) ) ){
+                    // Afin d'appliquer la largeur sauvegardé par l'utilisateur,
+                    // on considère les colonnes avec préférences de la même manière
+                    // que les colonnes non-redimensionnable.
                     unresizable += col.getWidth();
                 } else if (col.isVisible()) {
                     resizableColumns.add(col);
@@ -574,9 +606,13 @@ public final class SIRS extends SirsCore {
      */
     public static Image getOrLoadImage(final String uri) {
         try {
-            return IMAGE_CACHE.getOrCreate(uri, () ->
-                    new Image(uri, 512, 512, true, false, false)
-            );
+            return IMAGE_CACHE.getOrCreate(uri, () -> {
+                final Image img = new Image(uri, 512, 512, true, false, false);
+                if (img.isError()) {
+                    return null;
+                }
+                return img;
+            });
         } catch (RuntimeException ex) {
             throw ex;
         } catch (Exception e) {

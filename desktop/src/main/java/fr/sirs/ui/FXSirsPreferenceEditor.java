@@ -20,6 +20,7 @@ package fr.sirs.ui;
 
 import fr.sirs.SIRS;
 import fr.sirs.util.SaveableConfiguration;
+import fr.sirs.util.SirsStringConverter;
 import fr.sirs.util.property.SirsPreferences;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -30,6 +31,7 @@ import javafx.beans.DefaultProperty;
 import javafx.beans.property.Property;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.collections.ObservableMap;
 import javafx.event.ActionEvent;
 import javafx.geometry.HPos;
@@ -38,6 +40,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextField;
@@ -63,10 +66,12 @@ public class FXSirsPreferenceEditor extends ScrollPane implements SaveableConfig
     private static final HashMap<SirsPreferences.PROPERTIES, Node> EDITOR_OVERRIDES = new HashMap<>();
     static {
         EDITOR_OVERRIDES.put(SirsPreferences.PROPERTIES.DESIGNATION_AUTO_INCREMENT, new IncrementCheckBox());
+        
+        EDITOR_OVERRIDES.put(SirsPreferences.PROPERTIES.ABSTRACT_SHOWCASE, new ShowCaseComboBox());
     }
 
     final ObservableMap<SirsPreferences.PROPERTIES, String> editedProperties = FXCollections.observableHashMap();
-
+    
     public FXSirsPreferenceEditor() {
         final GridPane propertyPane = new GridPane();
         propertyPane.setAlignment(Pos.CENTER);

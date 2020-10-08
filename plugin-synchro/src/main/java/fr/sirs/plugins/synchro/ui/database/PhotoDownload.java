@@ -4,26 +4,29 @@ import fr.sirs.SIRS;
 import fr.sirs.Session;
 import fr.sirs.core.model.AbstractPhoto;
 import fr.sirs.plugins.synchro.attachment.AttachmentUtilities;
+import fr.sirs.plugins.synchro.attachment.AttachmentsSizeAndTroncons;
 import fr.sirs.plugins.synchro.common.DocumentUtilities;
+import fr.sirs.plugins.synchro.common.PhotoAndTroncon;
 import fr.sirs.plugins.synchro.common.PhotoFinder;
+import fr.sirs.plugins.synchro.common.PhotosTronconWrapper;
 import fr.sirs.plugins.synchro.concurrent.AsyncPool;
 import fr.sirs.ui.Growl;
-import fr.sirs.util.property.DocumentRoots;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.LongProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleLongProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
@@ -37,7 +40,6 @@ import javafx.scene.control.RadioButton;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import org.apache.sis.util.ArgumentChecks;
-import org.ektorp.AttachmentInputStream;
 import org.ektorp.CouchDbConnector;
 import org.geotoolkit.gui.javafx.util.TaskManager;
 
@@ -77,13 +79,15 @@ public class PhotoDownload extends StackPane {
     @FXML
     private Button uiImportBtn;
 
+    private final ObjectProperty<Set<String>> tronconIds =new SimpleObjectProperty<>();
+
     private final Session session;
 
-    private final ObservableValue<Function<AbstractPhoto, Path>> destinationProvider;
+    private final ObservableValue<Function<PhotoAndTroncon, Path>> destinationProvider;
 
     private final AsyncPool pool;
 
-    public PhotoDownload(final AsyncPool pool, final Session session, final ObservableValue<Function<AbstractPhoto, Path>> destinationProvider) {
+    public PhotoDownload(final AsyncPool pool, final Session session, final ObservableValue<Function<PhotoAndTroncon, Path>> destinationProvider) {
         ArgumentChecks.ensureNonNull("Asynchronous executor", pool);
         ArgumentChecks.ensureNonNull("Session", session);
         ArgumentChecks.ensureNonNull("Path provider", destinationProvider);
@@ -96,45 +100,23 @@ public class PhotoDownload extends StackPane {
         uiDate.disableProperty().bind(uiDateTrigger.selectedProperty().not());
     }
 
+    ObjectProperty<Set<String>> getTronconIds() {
+        return tronconIds;
+    }
+
     @FXML
     void estimate(ActionEvent event) {
-        final Stream<AbstractPhoto> photos = getPhotographs();
+        final Stream<PhotoAndTroncon> photos = getPhotographs();
 
         final CouchDbConnector connector = session.getConnector();
 
-        final AtomicLong count = new AtomicLong();
-        final TaskManager.MockTask<Long> t = new TaskManager.MockTask("Estimation...", () -> {
-            final Thread th = Thread.currentThread();
-            try {
-                return photos
-                        .peek(photo -> {
-                            if (th.isInterrupted())
-                                throw new RuntimeException(new InterruptedException());
-                        })
-                        .peek(photo -> count.incrementAndGet())
-                        .mapToLong(photo -> AttachmentUtilities.size(connector, photo))
-                        .sum();
-            } catch (RuntimeException e) {
-                if (e.getCause() instanceof InterruptedException) {
-                    throw (InterruptedException) e.getCause();
-                } else {
-                    throw e;
-                }
-            }
-        });
+//        final Task<Map.Entry<Long, Long>> t
+        final Task<AttachmentsSizeAndTroncons> t = AttachmentUtilities.estimateSizeAndTroncons(connector, photos);
 
-        t.setOnFailed(evt -> {
-            SIRS.LOGGER.log(Level.WARNING, "Estimation failed", t.getException());
-            Platform.runLater(() -> new Growl(Growl.Type.ERROR, "Impossible d'estimer le volume des données à télécharger.").showAndFade());
-                });
-        t.setOnSucceeded(evt -> Platform.runLater(() -> {
-            final long nb = count.get();
-            uiNb.setText(nb < 0? "inconnu" : Long.toString(nb));
-            uiSize.setText(SIRS.toReadableSize(t.getValue()));
-        }));
+        t.setOnFailed(ResultTaskUtilities.failedEstimation(t));
+        t.setOnSucceeded(ResultTaskUtilities.succedSizeAndTronconsEstimation(t, uiNb, uiSize, tronconIds));
 
         uiProgressPane.visibleProperty().bind(t.runningProperty());
-
         uiCancel.setOnAction(evt -> t.cancel(true));
 
         TaskManager.INSTANCE.submit(t);
@@ -142,8 +124,15 @@ public class PhotoDownload extends StackPane {
 
     @FXML
     void importPhotos(ActionEvent event) {
+        final Alert confirmation = new Alert(Alert.AlertType.CONFIRMATION, "Confirmer le Téléchargement ?\nSi vous souhaitez choisir au préalable le(s) répertoire(s) de destination, Cliquez d'abord sur le bouton \"Estimer\".", ButtonType.NO, ButtonType.YES);
+        confirmation.setResizable(true);
+        final Optional<ButtonType> res = confirmation.showAndWait();
+        if (!((res.isPresent() && ButtonType.YES.equals(res.get())))) {
+            return;
+        }
+
         final CouchDbConnector connector = session.getConnector();
-        final Function<AbstractPhoto, Path> destinationFinder = destinationProvider.getValue();
+        final Function<PhotoAndTroncon, Path> destinationFinder = destinationProvider.getValue();
         if (destinationFinder == null) {
             final Alert alert = new Alert(Alert.AlertType.ERROR, "Aucune destination spécifiée pour télécharger les données", ButtonType.OK);
             alert.setResizable(true);
@@ -151,11 +140,13 @@ public class PhotoDownload extends StackPane {
             return;
         }
 
+        // Note : incremented in handleResult method.
         final LongProperty count = new SimpleLongProperty(0);
-        final Function<AbstractPhoto, LongProperty> downloader = photo -> {
+        final Function<PhotoAndTroncon, LongProperty> downloader = photo -> {
             final Path output = destinationFinder.apply(photo);
             try {
-                download(connector, photo, output);
+                Files.createDirectories(output.getParent());
+                download(connector, photo.getPhoto(), output);
                 return count;
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
@@ -175,20 +166,21 @@ public class PhotoDownload extends StackPane {
         TaskManager.INSTANCE.submit(download);
     }
 
-    private Stream<AbstractPhoto> getPhotographs() {
-        Stream<AbstractPhoto> distantPhotos = new PhotoFinder(session).get();
+    private Stream<PhotoAndTroncon> getPhotographs() {
+        Stream<PhotosTronconWrapper> distantPhotos = new PhotoFinder(session).get();
 
         if (uiDateTrigger.isSelected()) {
             final LocalDate since = uiDate.getValue().minusDays(1);
-            distantPhotos = distantPhotos.filter(photo -> photo.getDate() != null && since.isBefore(photo.getDate()));
+            distantPhotos = distantPhotos.map(wrapper -> wrapper.applyFilter(photo -> photo.getDate() != null && since.isBefore(photo.getDate())));
         }
 
         final CouchDbConnector connector = session.getConnector();
         return distantPhotos
+                .flatMap(wrapper -> wrapper.getPhotosAndTronçons())
                 // Skip photographs already downloaded
-                .filter(photo -> !DocumentUtilities.isFileAvailable(photo))
+                .filter(photo -> !DocumentUtilities.isFileAvailable(photo.getPhoto()))
                 // Find photographs uploaded in database.
-                .filter(photo -> AttachmentUtilities.isAvailable(connector, photo));
+                .filter(photo -> AttachmentUtilities.isAvailable(connector, photo.getPhoto()));
     }
 
     private void handleResult(final LongProperty count, final Throwable error) {
@@ -204,29 +196,16 @@ public class PhotoDownload extends StackPane {
     }
 
     private static void download(final CouchDbConnector connector, final AbstractPhoto photo, Path destination) throws IOException {
-        final Path tmpFile = Files.createTempFile(photo.getId(), ".img");
-        try (final AttachmentInputStream stream = AttachmentUtilities.download(connector, photo)) {
-            Files.copy(stream, tmpFile, StandardCopyOption.REPLACE_EXISTING);
-            Files.move(tmpFile, destination, StandardCopyOption.REPLACE_EXISTING);
-            final Optional<Path> root = DocumentRoots.getRoot(photo);
-            if (root.isPresent()) {
-                photo.setChemin(root.get().relativize(destination).toString());
-            } else {
-                photo.setChemin(destination.toString());
-            }
-            connector.update(photo.getCouchDBDocument());
+        AttachmentUtilities.download(connector, photo, destination);
 
-            /* Once we've downloaded the image, we'll try to delete it from database.
-             * Note : If this operation fails, we still consider operation as a
-             * success, because the image is available locally.
-             */
-            try {
-                AttachmentUtilities.delete(connector, photo);
-            } catch (Exception e) {
-                SIRS.LOGGER.log(Level.WARNING, "Cannot delete image from database", e);
-            }
-        } finally {
-            Files.deleteIfExists(tmpFile); // In case of error, we clear the unmoved temporary file.
+        /* Once we've downloaded the image, we'll try to delete it from database.
+         * Note : If this operation fails, we still consider operation as a
+         * success, because the image is available locally.
+         */
+        try {
+            AttachmentUtilities.delete(connector, photo);
+        } catch (Exception e) {
+            SIRS.LOGGER.log(Level.WARNING, "Cannot delete image from database", e);
         }
     }
 }

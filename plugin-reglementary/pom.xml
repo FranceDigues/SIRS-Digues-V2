@@ -5,9 +5,9 @@
     <!-- Name of the plugin, used for packaging and description -->
     <artifactId>plugin-reglementary</artifactId>
     <!-- Version must be composed of two integers (major and minor version) separated by a dot. -->
-    <version>1.7</version>
+    <version>1.12</version>
     <packaging>jar</packaging>
-    
+
     <name>Plugin réglementaire</name>
     <description>Gestion d'obligations réglementaires</description>
     <!--url>http://www.myorganization.org</url-->
@@ -19,7 +19,7 @@
     </parent>
 
     <properties>
-        <plugin.core.version.min>4</plugin.core.version.min>
+        <plugin.core.version.min>25</plugin.core.version.min>
     </properties>
 
     <dependencies>
@@ -80,7 +80,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
-                    <archive>                   
+                    <archive>
                         <manifest>
                             <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                             <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
@@ -88,8 +88,8 @@
                     </archive>
                 </configuration>
             </plugin>
-            
-            
+
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -101,7 +101,7 @@
                     <encoding>${project.encoding}</encoding>  <!-- The -encoding argument for the Java compiler. -->
                 </configuration>
             </plugin>
-            
+
             <plugin>
                 <groupId>fr.sirs.maven</groupId>
                 <artifactId>gen-maven-plugin</artifactId>
@@ -145,7 +145,7 @@
                     <model>model/reglementary.ecore</model>
                     <modelPackage>fr.sirs.core.model</modelPackage>
                     <repositoryPackage>fr.sirs.core.component</repositoryPackage>
-                    
+
                 </configuration>
             </plugin>
         </plugins>

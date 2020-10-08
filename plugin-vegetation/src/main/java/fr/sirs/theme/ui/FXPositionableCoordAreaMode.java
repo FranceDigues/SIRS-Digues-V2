@@ -35,6 +35,7 @@ import fr.sirs.core.model.ZoneVegetation;
 import static fr.sirs.plugin.vegetation.PluginVegetation.computeRatio;
 import static fr.sirs.plugin.vegetation.PluginVegetation.toPoint;
 import static fr.sirs.plugin.vegetation.PluginVegetation.toPolygon;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import java.util.Map;
 import java.util.stream.Stream;
 import javafx.beans.binding.StringBinding;
@@ -203,7 +204,7 @@ public class FXPositionableCoordAreaMode extends FXPositionableAbstractCoordMode
             //on calcule les valeurs en fonction des points de debut et fin
 
             //on refait les points a partir de la géométrie
-            final TronconDigue t = FXPositionableMode.getTronconFromPositionable(pos);
+            final TronconDigue t = ConvertPositionableCoordinates.getTronconFromPositionable(pos);
             final TronconUtils.PosInfo ps = new TronconUtils.PosInfo(pos, t);
             final Point geoPointStart = ps.getGeoPointStart();
             final Point geoPointEnd = ps.getGeoPointEnd();
@@ -274,7 +275,7 @@ public class FXPositionableCoordAreaMode extends FXPositionableAbstractCoordMode
         if(startPoint==null) startPoint = endPoint;
         if(endPoint==null) endPoint = startPoint;
 
-        final TronconDigue troncon = FXPositionableMode.getTronconFromPositionable(zone);
+        final TronconDigue troncon = ConvertPositionableCoordinates.getTronconFromPositionable(zone);
 
 
         //on calcule le ratio on fonction de la rive et du coté

@@ -33,6 +33,7 @@ import javafx.event.ActionEvent;
 import javafx.scene.image.ImageView;
 import java.util.List;
 import java.util.ArrayList;
+import javafx.beans.property.ObjectProperty;
 
 /**
  *
@@ -87,16 +88,16 @@ public class FXBergePane extends AbstractFXElementPane<Berge> {
         ui_systemeRepDefautId_link.disableProperty().bind(ui_systemeRepDefautId.getSelectionModel().selectedItemProperty().isNull());
         ui_systemeRepDefautId_link.setGraphic(new ImageView(SIRS.ICON_LINK));
         ui_systemeRepDefautId_link.setOnAction((ActionEvent e)->Injector.getSession().showEditionTab(ui_systemeRepDefautId.getSelectionModel().getSelectedItem()));
-        borneIdsTable = new ListeningPojoTable(BorneDigue.class, null);
+        borneIdsTable = new ListeningPojoTable(BorneDigue.class, null, elementProperty());
         borneIdsTable.editableProperty().bind(disableFieldsProperty().not());
         borneIdsTable.createNewProperty().set(false);
         ui_borneIds.setContent(borneIdsTable);
         ui_borneIds.setClosable(false);
-        gestionsTable = new PojoTable(GestionTroncon.class, null);
+        gestionsTable = new PojoTable(GestionTroncon.class, null, elementProperty());
         gestionsTable.editableProperty().bind(disableFieldsProperty().not());
         ui_gestions.setContent(gestionsTable);
         ui_gestions.setClosable(false);
-        traitsTable = new TraitTable();
+        traitsTable = new TraitTable(elementProperty());
         traitsTable.editableProperty().bind(disableFieldsProperty().not());
         ui_traits.setContent(traitsTable);
         ui_traits.setClosable(false);
@@ -190,8 +191,8 @@ public class FXBergePane extends AbstractFXElementPane<Berge> {
 
     private static final class TraitTable extends PojoTable{
 
-        public TraitTable() {
-            super(TraitBerge.class, null);
+        public TraitTable(final ObjectProperty<? extends Element> container) {
+            super(TraitBerge.class, null, container);
             createNewProperty.set(false);
             detaillableProperty.set(false);
             uiAdd.setVisible(false);

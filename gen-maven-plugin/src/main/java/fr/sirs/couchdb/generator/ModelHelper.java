@@ -158,6 +158,7 @@ public class ModelHelper extends Helper {
         imports.add("javafx.beans.property.SimpleObjectProperty");
         imports.add("javafx.beans.property.StringProperty");
         imports.add("javafx.beans.property.SimpleStringProperty");
+        imports.add("com.fasterxml.jackson.annotation.JsonIgnore");
 
         if (!isAbstract() && !isInterface()) {
             imports.add("org.springframework.beans.factory.config.ConfigurableBeanFactory");
@@ -166,14 +167,12 @@ public class ModelHelper extends Helper {
             imports.add("com.fasterxml.jackson.annotation.JsonInclude");
             imports.add("com.fasterxml.jackson.annotation.JsonInclude.Include");
             imports.add("com.fasterxml.jackson.annotation.JsonTypeInfo");
-            imports.add("com.fasterxml.jackson.annotation.JsonIgnore");
             imports.add("com.fasterxml.jackson.annotation.JsonIgnoreProperties");
         }
 
         if (hasDocument()) {
             imports.add("java.util.*");
             imports.add("java.io.*");
-            imports.add("com.fasterxml.jackson.annotation.JsonIgnore");
             imports.add("com.fasterxml.jackson.annotation.JsonProperty");
             imports.add("org.ektorp.*");
             imports.add("org.ektorp.support.*");

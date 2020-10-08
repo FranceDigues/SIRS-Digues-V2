@@ -59,7 +59,10 @@ import java.util.function.Predicate;
 import java.util.logging.Level;
 import javafx.animation.FadeTransition;
 import javafx.application.Platform;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
+import javafx.beans.value.WeakChangeListener;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
@@ -112,10 +115,12 @@ public class Session extends SessionCore {
     public static String FLAG_SIRSLAYER = "SirsLayer";
 
     ////////////////////////////////////////////////////////////////////////////
-    // GESTION DES REFERENCES
+    // GESTION et MISE À JOUR DES REFERENCES ET DES REQUÊTES PRÉPROGRAMMÉES
     ////////////////////////////////////////////////////////////////////////////
     private final ReferenceChecker referenceChecker;
     public ReferenceChecker getReferenceChecker(){return referenceChecker;}
+    private final QueryChecker queryChecker;
+    public QueryChecker getQueryChecker(){return queryChecker;}
 
     ////////////////////////////////////////////////////////////////////////////
     private MapContext mapContext;
@@ -176,17 +181,17 @@ public class Session extends SessionCore {
                     DecorationXMLParser.class.getResource("/org/geotoolkit/icon/boussole.svg"),
                     new Dimension(100,100));
 
+
+
     @Autowired
     public Session(CouchDbConnector couchDbConnector) {
         super(couchDbConnector);
-        final String referenceUrl;
-        if(SirsPreferences.INSTANCE.getPropertySafe(SirsPreferences.PROPERTIES.REFERENCE_URL)!=null){
-            referenceUrl = SirsPreferences.INSTANCE.getPropertySafe(SirsPreferences.PROPERTIES.REFERENCE_URL);
-        }
-        else {
-            referenceUrl = SirsPreferences.PROPERTIES.REFERENCE_URL.getDefaultValue();
-        }
-        referenceChecker = new ReferenceChecker(referenceUrl);
+        referenceChecker = new ReferenceChecker(
+            SirsPreferences.INSTANCE.getPropertySafeOrDefault(SirsPreferences.PROPERTIES.REFERENCE_URL)
+        );
+        queryChecker = new QueryChecker(
+            SirsPreferences.INSTANCE.getPropertySafeOrDefault(SirsPreferences.PROPERTIES.PREPROGRAMMED_QUERIES_URL)
+        );
         printManager = new PrintManager();
     }
 
@@ -246,15 +251,21 @@ public class Session extends SessionCore {
                 //Fond de plan
                 backgroundGroup.setName("Fond de plan");
                 mapContext.items().add(0,backgroundGroup);
-                final CoverageStore store = new OSMTileMapClient(new URL("http://tile.openstreetmap.org"), null, 18, true);
+//                final CoverageStore store = new OSMTileMapClient(new URL("http://tile.openstreetmap.org"), null, 18, true);
+//                final CoverageStore store = new OSMTileMapClient(new URL("http://c.tile.stamen.com/terrain"), null, 18, true);
+                final CoverageStore store = new OSMTileMapClient(new URL("http://c.tile.stamen.com/toner"), null, 18, true);
 
                 for (GenericName n : store.getNames()) {
                     final CoverageReference cr = store.getCoverageReference(n);
                     final CoverageMapLayer cml = MapBuilder.createCoverageLayer(cr);
-                    cml.setName("Open Street Map");
+                    cml.setName("Stamen");
                     cml.setDescription(new DefaultDescription(
-                            new SimpleInternationalString("Open Street Map"),
-                            new SimpleInternationalString("Open Street Map")));
+                            new SimpleInternationalString("Stamen"),
+                            new SimpleInternationalString("Stamen")));
+//                    cml.setName("Open Street Map");
+//                    cml.setDescription(new DefaultDescription(
+//                            new SimpleInternationalString("Open Street Map"),
+//                            new SimpleInternationalString("Open Street Map")));
                     cml.setVisible(false);
                     backgroundGroup.items().add(cml);
                     break;
@@ -301,15 +312,15 @@ public class Session extends SessionCore {
     ////////////////////////////////////////////////////////////////////////////
 
     /**
-     * 
+     *
      * @param object The object the edition tab is requested for.
      */
     public void showEditionTab(final Object object) {
         showEditionTab(object, SIRS.CONSULTATION_PREDICATE);
     }
-    
+
     /**
-     * 
+     *
      * @param object The object the edition tab is requested for.
      * @param editionPredicate Prédicat d'édition du panneau à l'ouverture
      */
@@ -359,7 +370,7 @@ public class Session extends SessionCore {
             case USERS:
                 return getOrCreateTab(AdminTab.USERS, () -> {
                     final FXFreeTab tab = new FXFreeTab(title);
-                    final PojoTable usersTable = new PojoTable(getRepositoryForClass(Utilisateur.class), "Table des utilisateurs") {
+                    final PojoTable usersTable = new PojoTable(getRepositoryForClass(Utilisateur.class), "Table des utilisateurs", (ObjectProperty<? extends Element>) null) {
                         @Override
                         protected void deletePojos(final Element... pojos) {
                             final List<Element> pojoList = new ArrayList<>();
@@ -474,7 +485,9 @@ public class Session extends SessionCore {
             return openEditors.getOrCreate(target, () -> {
                 final FXFreeTab newTab = tabCreator.call();
                 if (newTab != null) {
-                    newTab.setOnClosed(event -> openEditors.remove(target));
+                    newTab.setOnClosed(event -> {
+                        openEditors.remove(target);
+                                });
                 }
                 return newTab;
             });
@@ -558,16 +571,21 @@ public class Session extends SessionCore {
                 });
             });
 
+
+            ChangeListener<String> listenDesignation = (ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
+                tab.setTextAbrege(generateElementTitle(target));
+            };
+
+            tab.hack = listenDesignation;
+
             // Update tab title if element designation changes.
             if (target instanceof PositionDocument) {
                 final PositionDocument positionDocument = (PositionDocument) target;
-                positionDocument.sirsdocumentProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
-                    tab.setTextAbrege(generateElementTitle(target));
-                });
+                positionDocument.sirsdocumentProperty().addListener(new WeakChangeListener<>(listenDesignation));
             }
-            target.designationProperty().addListener((ObservableValue<? extends String> observable, String oldValue, String newValue) -> {
-                tab.setTextAbrege(generateElementTitle(target));
-            });
+
+            target.designationProperty().addListener(new WeakChangeListener<>(listenDesignation));
+
             tab.setTextAbrege(generateElementTitle(target));
 
             return tab;

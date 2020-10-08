@@ -20,6 +20,7 @@ package fr.sirs;
 
 import fr.sirs.core.SirsDBInfo;
 import fr.sirs.core.component.DatabaseRegistry;
+import fr.sirs.util.property.SirsPreferences;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -65,9 +66,11 @@ public class FXSplashscreen {
         remoteTip.textProperty().bind(uiRemoteDb.textProperty());
         uiRemoteDb.setTooltip(remoteTip);
 
-        final TaskManager.MockTask<SirsDBInfo> task = new TaskManager.MockTask<>("Recherche...", () -> registry.getInfo(databaseName).orElse(null));
-        task.setOnSucceeded(evt -> Platform.runLater(() -> {
-            final SirsDBInfo dbInfo = task.getValue();
+        final TaskManager.MockTask<SirsDBInfo> remoteInfoTask = new TaskManager.MockTask<>("Recherche d'informations sur une base distante…", 
+                () -> registry.getInfo(databaseName).orElse(null));
+        
+        remoteInfoTask.setOnSucceeded(evt -> Platform.runLater(() -> {
+            final SirsDBInfo dbInfo = remoteInfoTask.getValue();
             if (dbInfo == null || dbInfo.getRemoteDatabase() == null || dbInfo.getRemoteDatabase().isEmpty()) {
                 uiRemoteDb.setText("Aucune");
             } else {
@@ -75,20 +78,21 @@ public class FXSplashscreen {
             }
         }));
 
-        Runnable onCancelOrFail = () -> {
+        final Runnable onCancelOrFail = () -> {
             uiRemoteDb.setText("Impossible de récupérer l'information");
             uiRemoteDb.setTextFill(Color.RED);
         };
 
-        task.setOnCancelled(evt -> Platform.runLater(onCancelOrFail));
-        task.setOnFailed(evt -> {
-            SIRS.LOGGER.log(Level.WARNING, "Cannot get database information", task.getException());
+        remoteInfoTask.setOnCancelled(evt -> Platform.runLater(onCancelOrFail));
+        remoteInfoTask.setOnFailed(evt -> {
+            SIRS.LOGGER.log(Level.WARNING, "Cannot get database information", remoteInfoTask.getException());
             Platform.runLater(onCancelOrFail);
         });
 
-        TaskManager.INSTANCE.submit(task);
+        TaskManager.INSTANCE.submit(remoteInfoTask);
 
-        TaskManager.MockTask<Set<String>> task2 = new TaskManager.MockTask<>("", () -> registry.getSynchronizationTasks(databaseName)
+        TaskManager.MockTask<Set<String>> remoteSynchroTask = new TaskManager.MockTask<>("", () -> 
+                registry.getSynchronizationTasks(SirsPreferences.INSTANCE.getProperty(SirsPreferences.PROPERTIES.COUCHDB_LOCAL_ADDR) + databaseName)
                 .map(status -> {
                     if (status.getSourceDatabaseName().equals(databaseName)) {
                         return DatabaseRegistry.cleanDatabaseName(status.getTargetDatabaseName());
@@ -98,8 +102,8 @@ public class FXSplashscreen {
                 })
                 .collect(Collectors.toSet()));
 
-        task2.setOnSucceeded(evt -> {
-            final Set<String> synchronisations = task2.getValue();
+        remoteSynchroTask.setOnSucceeded(evt -> {
+            final Set<String> synchronisations = remoteSynchroTask.getValue();
             if (synchronisations.isEmpty()) {
                 uiSynchroState.setText("Aucune synchronisation en cours");
             } else {
@@ -112,6 +116,6 @@ public class FXSplashscreen {
             }
         });
 
-        TaskManager.INSTANCE.submit(task2);
+        TaskManager.INSTANCE.submit(remoteSynchroTask);
     }
 }

@@ -91,8 +91,20 @@ public class ExterneSectionRapport extends AbstractSectionRapport implements SIR
         return null;
     }
 
+    /**
+     * Pour les sections de type "document externe", l'impression consiste en l'inclusion du document indiqué dans le 
+     * document principal.
+     * 
+     * @param context
+     * @throws Exception 
+     */
     @Override
     protected void printSection(PrintContext context) throws Exception {
+        
+        /*
+        A- Détermination du chemin vers le document externe
+        ==================================================*/
+        
         /* First, we'll analyze input path to determine where target document is
          * located. First, we will use the same strategy as other documents
          * refered by SIRS : We'll concatenate local path with defined root one.
@@ -132,6 +144,10 @@ public class ExterneSectionRapport extends AbstractSectionRapport implements SIR
             throw ex;
         }
 
+        /*
+        B- inclusion du document externe dans le document principal
+        ==========================================================*/
+        
         ODTUtils.append(context.target, path);
     }
 }

@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -30,7 +30,7 @@ import javafx.scene.layout.BorderPane;
 /**
  * Base implementation for {@link Element} editor. Simply provide element property
  * defined in {@link FXElementPane}.
- * 
+ *
  * @author Alexis Manin (Geomatys)
  * @param <T> Type of element to edit.
  */
@@ -38,7 +38,7 @@ public abstract class AbstractFXElementPane<T extends Element> extends BorderPan
 
     protected final ObjectProperty<T> elementProperty = new SimpleObjectProperty<>();
     private final BooleanProperty editableProperty = new SimpleBooleanProperty();
-    
+
     @Override
     public void setElement(T element) {
         elementProperty.set(element);
@@ -48,7 +48,7 @@ public abstract class AbstractFXElementPane<T extends Element> extends BorderPan
     public ObjectProperty<T> elementProperty() {
         return elementProperty;
     }
-    
+
     @Override
     public BooleanProperty disableFieldsProperty() {
         return editableProperty;
@@ -69,5 +69,5 @@ public abstract class AbstractFXElementPane<T extends Element> extends BorderPan
             return mapper.mapClassName();
         }
     }
-    
+
 }

@@ -36,6 +36,7 @@ import fr.sirs.core.model.ZoneVegetation;
 import static fr.sirs.plugin.vegetation.PluginVegetation.computeRatio;
 import static fr.sirs.plugin.vegetation.PluginVegetation.toPoint;
 import static fr.sirs.plugin.vegetation.PluginVegetation.toPolygon;
+import fr.sirs.util.ConvertPositionableCoordinates;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -164,7 +165,7 @@ public class FXPositionableLinearAreaMode extends FXPositionableAbstractLinearMo
         final PositionableVegetation pos = (PositionableVegetation) positionableProperty().get();
         final String mode = pos.getGeometryMode();
 
-        final TronconDigue t = FXPositionableMode.getTronconFromPositionable(pos);
+        final TronconDigue t = ConvertPositionableCoordinates.getTronconFromPositionable(pos);
         final SystemeReperageRepository srRepo = (SystemeReperageRepository) Injector.getSession().getRepositoryForClass(SystemeReperage.class);
         final List<SystemeReperage> srs = srRepo.getByLinear(t);
         final SystemeReperage defaultSR;
@@ -269,7 +270,7 @@ public class FXPositionableLinearAreaMode extends FXPositionableAbstractLinearMo
         positionable.setDistanceFinMax(uiEndFar.getValue());
 
         //on recalculate la geometrie linear
-        final TronconDigue troncon = FXPositionableMode.getTronconFromPositionable(positionable);
+        final TronconDigue troncon = ConvertPositionableCoordinates.getTronconFromPositionable(positionable);
 
         //on calcule le ratio on fonction de la rive et du coté
         double ratio = computeRatio(troncon, positionable);

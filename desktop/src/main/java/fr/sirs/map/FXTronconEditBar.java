@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -21,6 +21,7 @@ package fr.sirs.map;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuButton;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToolBar;
 import javafx.scene.layout.HBox;
@@ -42,9 +43,11 @@ public class FXTronconEditBar extends ToolBar {
 
         final Label text = new Label("Outils de création/édition");
         text.setAlignment(Pos.CENTER);
-        
+
         final ToggleButton butEditTroncon = new TronconEditAction(map).createToggleButton(ActionUtils.ActionTextBehavior.HIDE);
         butEditTroncon.getStyleClass().add(LEFT);
+        final MenuButton butEditObjet = new ObjetEditAction(map).createMenuButton(); //createToggleButton(ActionUtils.ActionTextBehavior.HIDE);
+        butEditObjet.getStyleClass().add(CENTER);
         final ToggleButton butCut = new TronconCutAction(map).createToggleButton(ActionUtils.ActionTextBehavior.HIDE);
         butCut.getStyleClass().add(CENTER);
         final ToggleButton butMerge = new TronconMergeAction(map).createToggleButton(ActionUtils.ActionTextBehavior.HIDE);
@@ -59,8 +62,8 @@ public class FXTronconEditBar extends ToolBar {
         importBornes.getStyleClass().add(CENTER);
         final ToggleButton butInfo = new FXOpenElementEditorAction(map).createToggleButton(ActionUtils.ActionTextBehavior.HIDE);
         butInfo.getStyleClass().add(RIGHT);
-        
-        getItems().add(new HBox(butEditTroncon, butCut, butMerge, butEditSr, butCalc, butEditConvert, importBornes, butInfo));
+
+        getItems().add(new HBox(butEditTroncon, butEditObjet, butCut, butMerge, butEditSr, butCalc, butEditConvert, importBornes, butInfo));
 
     }
 

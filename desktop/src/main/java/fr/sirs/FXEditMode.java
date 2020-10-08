@@ -24,6 +24,8 @@ import static fr.sirs.SIRS.ICON_EXCLAMATION_CIRCLE;
 import fr.sirs.core.model.Element;
 import java.io.IOException;
 import java.util.function.Predicate;
+import javafx.beans.InvalidationListener;
+import javafx.beans.Observable;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -35,7 +37,6 @@ import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.image.ImageView;
@@ -75,6 +76,8 @@ public class FXEditMode extends VBox {
     private final BooleanBinding editionProhibited;
 
     public FXEditMode() {
+        
+        // 1- chargement du FXML associé
         final Class cdtClass = FXEditMode.class;
         final String fxmlpath = "/"+cdtClass.getName().replace('.', '/')+".fxml";
         final FXMLLoader loader = new FXMLLoader(cdtClass.getResource(fxmlpath));
@@ -89,6 +92,7 @@ public class FXEditMode extends VBox {
             throw new IllegalArgumentException(ex.getMessage(), ex);
         }
 
+        // 2- initialisation des propriétés auteur/validité
         authorIDProperty = new SimpleStringProperty();
         validProperty = new SimpleBooleanProperty();
         validProperty.addListener((ObservableValue<? extends Boolean> observable, Boolean oldValue, Boolean newValue) -> {
@@ -96,32 +100,56 @@ public class FXEditMode extends VBox {
             });
         validProperty.set(true);
 
+        // 3- initialisation du contrôle de l'édition/consultation
+        
+        // on récupère le binding indiquant si l'édition doit être bloquée
         editionProhibited = initEditionProhibition();
-        editionProhibited.addListener(obs -> {
-            if (editionProhibited.get())
-                uiEdit.setSelected(false);
-        });
+        
+        /*
+        Les changements d'utilisateurs peuvent provoquer la récupération des panneaux 
+        en cache. Il faut donc réinitialiser en conséquence l'état d'édition/consultation.
+        L'action est susceptible de varier.
+        */
+        editionProhibited.addListener(editionListener());
+        
+        // on fige les fonctionnalités de changement de mode si et seulement si l'édition est interdite
         uiEdit.disableProperty().bind(editionProhibited);
-        final BooleanBinding editBind = uiEdit.selectedProperty().not();
-        uiSave.disableProperty().bind(editBind);
+        uiConsult.disableProperty().bind(editionProhibited);
+        
+        // On peut enregistrer si et seulement si le mode édition est sélectionné
+        uiSave.disableProperty().bind(uiEdit.selectedProperty().not());
 
         final ToggleGroup group = new ToggleGroup();
         uiConsult.setToggleGroup(group);
         uiEdit.setToggleGroup(group);
-        group.selectedToggleProperty().addListener((ObservableValue<? extends Toggle> observable, Toggle oldValue, Toggle newValue) -> {
-            // We check that user has enough rights
-            if (editionProhibited.get())
-                group.selectToggle(uiConsult);
-            else if (newValue==null)
-                group.selectToggle(oldValue);
-            });
+        
+         // Par défaut, on est en mode consultation.
+         setToConsult();
+    }
+    
+    protected final void setToConsult(){
+        uiEdit.setSelected(false);
+        uiConsult.setSelected(true);
+    }
+    
+    /**
+     * Dans les panneaux d'éléments, on écoute l'invalidation de la propriété
+     * d'interdiction de l'édition et on passe en mode consultation uniquement si
+     * on n'a plus le droit d'éditer.
+     * @return 
+     */
+    protected InvalidationListener editionListener(){
+        return (Observable observable) -> {
+            if(editionProhibited.get()){
+                setToConsult();
+            }};
     }
 
     /**
      * Détermine la condition sous laquelle le passage en mode édition est interdit.
      *
      * Dans le cas général des fiches, on interdit l'édition des fiches si :
-     *  - la session indique que les éléments créés sont dans un état "invalidé" (role "externe").
+     *  - la session indique que les éléments créés sont dans un état "invalidé" (c'est le cas du rôle "externe").
      *  ET
      *  (
      *  - l'état de l'élément consulté est "validé" (le role "externe" n'a plus la main sur les éléments "validés", qu'il en soit l'auteur ou non).
@@ -132,10 +160,25 @@ public class FXEditMode extends VBox {
      * @return  Le binding de contrôle du bouton d'édition.
      */
     protected BooleanBinding initEditionProhibition() {
-        return session.needValidationProperty().and(validProperty.or(
-                authorIDProperty.isNotEqualTo(session.getUtilisateur().getId())));
+        
+        /*
+        on bloque l'édition si l'utilisateur ne crée pas des documents valides 
+        d'office c'est à dire s'il n'est ni ADMIN ni USER (i.e. donc s'il est 
+        EXTERN ou GUEST).
+        */
+        return session.createValidDocuments().not().and(
+            /*
+            Mais pour bloquer l'édition, on veut aussi que le document soit 
+            valide ou que l'utilisateur courant n'en soit pas l'auteur
+            (i.e. on autorise l'édition des documents invalides par leur auteur
+            même s'il ne s'agit pas d'un ADMIN ou d'un USER).
+            */
+            validProperty.or(
+                authorIDProperty.isNotEqualTo(session.userIdBinding())
+            )
+        );
     }
-
+            
     /**
      * Mise à jour de l'indication de validité.
      *
@@ -153,19 +196,22 @@ public class FXEditMode extends VBox {
         }
     }
 
+    // indique l'auteur de l'élément dont l'édition est contrôlée
     public StringProperty authorIDProperty(){return authorIDProperty;}
+    
+    // indique la validité de l'élément dont l'édition est contrôlée
     public BooleanProperty validProperty(){return validProperty;}
 
-    private void requireEdition(){
-        if(!uiEdit.isDisabled()){
-            uiEdit.setSelected(true);
-        }
-    }
 
     public void requireEditionForElement(final Element element, final Predicate<Element> editionPredicate){
         ArgumentChecks.ensureNonNull("element", element);
         if(editionPredicate.test(element)){
-            requireEdition();
+            if(!editionProhibited.get()){
+                uiEdit.setSelected(true);
+            }
+            else {
+                SIRS.LOGGER.fine("édition non autorisée");
+            }
         }
     }
 

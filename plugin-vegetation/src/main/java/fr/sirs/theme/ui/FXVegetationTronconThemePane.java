@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import javafx.beans.property.ObjectProperty;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
@@ -52,8 +53,8 @@ public class FXVegetationTronconThemePane extends FXTronconThemePane {
 
     protected class VegetationTronconThemePojoTable extends TronconThemePojoTable<ParcelleVegetation>{
 
-        public VegetationTronconThemePojoTable(TronconTheme.ThemeManager<ParcelleVegetation> group) {
-            super(group);
+        public VegetationTronconThemePojoTable(TronconTheme.ThemeManager<ParcelleVegetation> group, final ObjectProperty<? extends Element> container) {
+            super(group, container);
 // On n'a plus de colonne d'alerte dans la nouvelle spec car elle n'a plus de sens du fait du panneau d'exploitation.
 //            final TableColumn<ParcelleVegetation, ParcelleVegetation> alertColumn = new AlertTableColumn();
 //            getTable().getColumns().add((TableColumn) alertColumn);
@@ -90,7 +91,7 @@ public class FXVegetationTronconThemePane extends FXTronconThemePane {
 
                     // Initialisation des planifications pour les années du plan.
                     PluginVegetation.ajustPlanifSize(created, dureePlan);
-                    
+
                     repo.add(created);
                     getAllValues().add(created);
                 }
@@ -137,7 +138,7 @@ public class FXVegetationTronconThemePane extends FXTronconThemePane {
         final HBox topPane = new HBox(separator, editMode);
         HBox.setHgrow(separator, Priority.ALWAYS);
 
-        final VegetationTronconThemePojoTable table = new VegetationTronconThemePojoTable(manager);
+        final VegetationTronconThemePojoTable table = new VegetationTronconThemePojoTable(manager, (ObjectProperty<? extends Element>) null);
         table.setDeletor(manager.getDeletor());
         table.editableProperty().bind(editMode.editionState());
         table.foreignParentProperty().bindBidirectional(linearIdProperty());

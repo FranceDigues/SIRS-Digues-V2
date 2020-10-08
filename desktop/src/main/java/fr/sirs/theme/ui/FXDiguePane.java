@@ -22,7 +22,9 @@ import fr.sirs.Injector;
 import fr.sirs.Session;
 import fr.sirs.core.component.TronconDigueRepository;
 import fr.sirs.core.model.Digue;
+import fr.sirs.core.model.Element;
 import fr.sirs.core.model.TronconDigue;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.fxml.FXML;
@@ -39,12 +41,13 @@ public class FXDiguePane extends FXDiguePaneStub {
 
     @FXML private VBox centerContent;
 
-    private final TronconPojoTable table = new TronconPojoTable();
+    private final TronconPojoTable table;
 
 
     protected FXDiguePane() {
         super();
         Injector.injectDependencies(this);
+        table = new TronconPojoTable(elementProperty());
         table.editableProperty().set(false);
         table.parentElementProperty().bind(elementProperty);
         centerContent.getChildren().add(table);
@@ -71,8 +74,8 @@ public class FXDiguePane extends FXDiguePaneStub {
 
     private class TronconPojoTable extends PojoTable {
 
-        public TronconPojoTable() {
-            super(TronconDigue.class, "Tronçons de la digue");
+        public TronconPojoTable(final ObjectProperty<? extends Element> container) {
+            super(TronconDigue.class, "Tronçons de la digue", container);
             createNewProperty.set(false);
             fichableProperty.set(false);
             uiAdd.setVisible(false);

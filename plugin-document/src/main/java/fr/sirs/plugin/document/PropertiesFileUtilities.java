@@ -21,6 +21,7 @@ package fr.sirs.plugin.document;
 import fr.sirs.Injector;
 import fr.sirs.core.SirsDBInfo;
 import fr.sirs.core.TronconUtils;
+import fr.sirs.core.component.AbstractPositionableRepository;
 import fr.sirs.core.component.DigueRepository;
 import fr.sirs.core.component.SirsDBInfoRepository;
 import fr.sirs.core.component.SystemeEndiguementRepository;
@@ -32,12 +33,15 @@ import fr.sirs.core.model.TronconDigue;
 import fr.sirs.plugin.document.ui.DatabaseVersionPane;
 import fr.sirs.plugin.document.ui.DocumentsPane;
 import static fr.sirs.plugin.document.ui.DocumentsPane.*;
+import fr.sirs.util.StreamingIterable;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.text.DecimalFormat;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -54,8 +58,10 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.DialogPane;
+import org.apache.sis.measure.NumberRange;
 import org.apache.sis.util.logging.Logging;
 import org.geotoolkit.nio.IOUtilities;
+import org.geotoolkit.util.collection.CloseableIterator;
 
 /**
  * Utility class managing the properties file adding different properties to the filesystem objects.
@@ -500,14 +506,36 @@ public class PropertiesFileUtilities {
         return null;
     }
 
-    public static  List<Objet> getElements(Collection<TronconDigue> troncons) {
+    public static  List<Objet> getElements(Collection<TronconDigue> troncons, final NumberRange dateRange) {
         final ArrayList<Objet> elements = new ArrayList<>();
+        final Collection<AbstractPositionableRepository<Objet>> repos = (Collection) Injector.getSession().getRepositoriesForClass(Objet.class);
+
         for (TronconDigue troncon : troncons) {
             if (troncon == null) {
                 continue;
             }
 
-            elements.addAll(TronconUtils.getObjetList(troncon.getDocumentId()));
+            for (final AbstractPositionableRepository<Objet> repo : repos) {
+                StreamingIterable<Objet> tmpElements = repo.getByLinearIdStreaming(troncon.getId());
+                try (final CloseableIterator<Objet> it = tmpElements.iterator()) {
+                    while (it.hasNext()) {
+                        Objet next = it.next();
+                        if (dateRange != null) {
+                            //on vérifie la date
+                            final LocalDate objDateDebut = next.getDate_debut();
+                            final LocalDate objDateFin = next.getDate_fin();
+                            final long debut = objDateDebut == null ? 0 : objDateDebut.atTime(0, 0, 0).toInstant(ZoneOffset.UTC).toEpochMilli();
+                            final long fin = objDateFin == null ? Long.MAX_VALUE : objDateFin.atTime(23, 59, 59).toInstant(ZoneOffset.UTC).toEpochMilli();
+                            final NumberRange objDateRange = NumberRange.create(debut, true, fin, true);
+                            if (!dateRange.intersectsAny(objDateRange)) {
+                                continue;
+                            }
+                        }
+
+                        elements.add(next);
+                    }
+                }
+            }
         }
         return elements;
     }

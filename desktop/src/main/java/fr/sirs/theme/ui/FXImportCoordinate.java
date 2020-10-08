@@ -26,6 +26,7 @@ import fr.sirs.SIRS;
 import fr.sirs.core.model.Positionable;
 import java.beans.PropertyChangeEvent;
 import java.io.File;
+import java.util.Collection;
 import java.util.EventObject;
 import java.util.Set;
 import java.util.logging.Level;
@@ -33,6 +34,7 @@ import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.ObservableMap;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
@@ -128,9 +130,7 @@ public class FXImportCoordinate extends FXAbstractImportCoordinate {
             }
 
             //liste des propriétés
-            final ObservableList<PropertyType> properties = FXCollections
-                    .observableArrayList(col.getFeatureType().getProperties(true))
-                    .sorted((o1, o2) -> o1.getName().compareTo(o2.getName()));
+            final ObservableList<PropertyType> properties = getPropertiesFromFeatures(col);
 
             uiAttX.setItems(properties);
             uiAttY.setItems(properties);

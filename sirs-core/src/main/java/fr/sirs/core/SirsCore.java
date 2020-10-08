@@ -83,6 +83,7 @@ import org.apache.sis.io.wkt.WKTFormat;
 import org.apache.sis.measure.Units;
 import org.apache.sis.referencing.CRS;
 import org.apache.sis.util.ArgumentChecks;
+import org.apache.sis.util.Version;
 
 import org.apache.sis.util.logging.Logging;
 import org.geotoolkit.internal.GeotkFX;
@@ -164,6 +165,16 @@ public class SirsCore {
 
     public static final Path LOCAL_QUERIES_PATH = CONFIGURATION_PATH.resolve("queries.properties");
 
+    /**
+     * Les requêtes préprogrammées de référence sont désormatis enregistrées sur le serveur de France-Digues et sont
+     * téléchargées à chaque nouvelle connexion lorsque le réseau est disponible.
+     *
+     * Mais afin que les requêtes préprogrammées soient utilisables même hors-ligne (du moins dans leur dernière version
+     * connue), ce n'est pas le fichier distant qui est directement utilisé pour la lecture et l'exécution des
+     * requêtes, mais une copie locale mise à jour à chaque nouvelle connexion avec le contenu du fichier distant.
+     */
+    public static final Path PREPROGRAMMED_QUERIES_PATH = CONFIGURATION_PATH.resolve("preprogrammedQueries.properties");
+
     public static final Path IMPORT_ERROR_DIR = CONFIGURATION_PATH.resolve("importErrors");
 
     public static final Path NTV2_DIR = CONFIGURATION_PATH.resolve("ntv2");
@@ -181,8 +192,16 @@ public class SirsCore {
     public static final String DATE_DEBUT_FIELD = "date_debut";
     public static final String DATE_FIN_FIELD = "date_fin";
     public static final String DATE_MAJ_FIELD = "dateMaj";
+
     public static final String BORNE_DEBUT_AVAL = "borne_debut_aval";
     public static final String BORNE_FIN_AVAL = "borne_fin_aval";
+
+    public static final String BORNE_DEBUT_DISTANCE = "borne_debut_distance";  //Doit correspondre au nom de la Propriété de la classe Positionable
+    public static final String BORNE_FIN_DISTANCE = "borne_fin_distance";  //Doit correspondre au nom de la Propriété de la classe Positionable
+
+
+    public static final String BORNE_DEBUT_ID = "borneDebutId";  //Doit correspondre au nom de la Propriété de la classe Positionable
+    public static final String BORNE_FIN_ID = "borneFinId";  //Doit correspondre au nom de la Propriété de la classe Positionable
 
     public static final String COMMENTAIRE_FIELD = "commentaire";
     public static final String GEOMETRY_FIELD = "geometry";
@@ -524,18 +543,28 @@ public class SirsCore {
      */
     public static Task<UpdateInfo> checkUpdate() {
         return TaskManager.INSTANCE.submit("Vérification des mises à jour", () -> {
-            String localVersion = getVersion();
+            final String localVersion = getVersion();
             if (localVersion == null || localVersion.isEmpty())
                 throw new IllegalStateException("La version locale de l'application est illisible !");
             final String updateAddr = SirsPreferences.INSTANCE.getPropertySafe(SirsPreferences.PROPERTIES.UPDATE_CORE_URL);
             try {
                 final URL updateURL = new URL(updateAddr);
-                Map config = new ObjectMapper().readValue(updateURL, Map.class);
+                final Map config = new ObjectMapper().readValue(updateURL, Map.class);
                 final Object distantVersion = config.get("version");
-                if (distantVersion instanceof String && localVersion.compareTo((String) distantVersion) < 0) {
-                    final Object packageUrl = config.get("url");
-                    if (packageUrl instanceof String) {
-                        return new UpdateInfo(localVersion, (String) distantVersion, new URL((String) packageUrl));
+                if (distantVersion instanceof String) {
+                    boolean updateAvailable = false;
+                    try {
+                        final Version currentVersion = new Version(localVersion);
+                        final Version availableVersion = new Version((String) distantVersion);
+                        updateAvailable = availableVersion.compareTo(currentVersion) > 0;
+                    } catch (Exception e) {
+                        LOGGER.log(Level.WARNING, "Cannot determine if an update is available. Bad version syntax ?", e);
+                    }
+                    if (updateAvailable) {
+                        final Object packageUrl = config.get("url");
+                        if (packageUrl instanceof String) {
+                            return new UpdateInfo(localVersion, (String) distantVersion, new URL((String) packageUrl));
+                        }
                     }
                 }
             } catch (IOException e) {

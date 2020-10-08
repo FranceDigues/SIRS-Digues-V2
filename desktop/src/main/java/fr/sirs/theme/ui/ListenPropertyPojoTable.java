@@ -2,7 +2,7 @@
  * This file is part of SIRS-Digues 2.
  *
  * Copyright (C) 2016, FRANCE-DIGUES,
- * 
+ *
  * SIRS-Digues 2 is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation, either version 3 of the License, or (at your option) any
@@ -25,7 +25,7 @@ import java.lang.reflect.Method;
 import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import java.util.logging.Level;
-import java.util.logging.Logger;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.Property;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -34,8 +34,8 @@ import javafx.concurrent.Task;
 
 /**
  *
- * This is a special kind of PojoTable that listen one specific property of its
- * items in order to know if they had to be removed from the table view.
+ * This is a special kind of PojoTable which listens one specific property of its
+ * items in order to know if they must be removed from the table view.
  *
  * This table is useful for links without opposite in order to detect an object
  * that were associated to the "virtual container" of the table list is no
@@ -62,7 +62,7 @@ import javafx.concurrent.Task;
  * <li> But it does not listen other objects, and so, it cannot know if they are
  * associated for the first time to the "virtual container".</li>
  * </ol>
- * 
+ *
  * @author Samuel Andrés (Geomatys)
  *
  * @param <T> The type of the listen property.
@@ -73,8 +73,8 @@ public class ListenPropertyPojoTable<T> extends PojoTable {
     protected Method propertyMethodToListen;
     protected T propertyReference;
 
-    public ListenPropertyPojoTable(Class pojoClass, String title) {
-        super(pojoClass, title);
+    public ListenPropertyPojoTable(Class pojoClass, String title, ObjectProperty<? extends Element> container) {
+        super(pojoClass, title, container);
         tableUpdaterProperty.addListener(new ChangeListener<Task>() {
             @Override
             public void changed(ObservableValue<? extends Task> observable, Task oldValue, Task newValue) {
@@ -100,7 +100,7 @@ public class ListenPropertyPojoTable<T> extends PojoTable {
         try {
             propertyMethodToListen = pojoClass.getMethod(propertyToListen);
         } catch (NoSuchMethodException | SecurityException ex) {
-            Logger.getLogger(ListenPropertyPojoTable.class.getName()).log(Level.SEVERE, null, ex);
+            SIRS.LOGGER.log(Level.WARNING, "No such property "+propertyToListen+" to listen…", ex);
         }
         this.propertyReference = propertyReference;
     }
@@ -115,6 +115,7 @@ public class ListenPropertyPojoTable<T> extends PojoTable {
         try {
             final Property<T> property = (Property<T>) propertyMethodToListen.invoke(element);
             if(listeners.get(element)==null){
+
                 final ChangeListener<T> changeListener = new ChangeListener<T>() {
                     @Override
                     public void changed(ObservableValue<? extends T> observable, T oldValue, T newValue) {

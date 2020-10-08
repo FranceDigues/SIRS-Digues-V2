@@ -127,13 +127,9 @@ public class FXAdminQueryPane extends BorderPane {
         uiDBList.setCellFactory(new SQLQueries.QueryListCellFactory());
         
         // Fill query lists
-        ObservableList<SQLQuery> localQueries = FXCollections.observableArrayList(SQLQueries.getLocalQueries());
-        uiLocalList.setItems(localQueries);
+        uiLocalList.setItems(FXCollections.observableArrayList(SQLQueries.getLocalQueries()));
 
-        final SQLQueryRepository repo = (SQLQueryRepository)Injector.getSession().getRepositoryForClass(SQLQuery.class);
-        ObservableList<SQLQuery> dbQueries = FXCollections.observableArrayList(
-                repo.getAll());
-        uiDBList.setItems(dbQueries);
+        uiDBList.setItems(FXCollections.observableArrayList(SQLQueries.dbQueries()));
         
         // Listen on database list to know which elements we must update.
         uiDBList.getItems().addListener((ListChangeListener.Change<? extends SQLQuery> c) -> {

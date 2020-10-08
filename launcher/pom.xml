@@ -15,11 +15,11 @@
     <packaging>jar</packaging>
     <name>SIRS2 Launcher</name>
     <description>Launcher</description>
-    
-    <!-- TODO activate back for license agreement support before 
+
+    <!-- TODO activate back for license agreement support before
     installation. Deactivated because it does not work well for .deb packages.
     <profiles>
-        
+
         <profile>
             <activation>
                 <activeByDefault>true</activeByDefault>
@@ -28,7 +28,7 @@
                 <additional.resources>src/main/deploy/additional/unix</additional.resources>
             </properties>
         </profile>
-        
+
         <profile>
             <id>Windows deployment</id>
             <activation>
@@ -43,7 +43,7 @@
             </properties>
         </profile>
     </profiles-->
-    
+
     <dependencies>
         <dependency>
             <groupId>fr.sirs</groupId>
@@ -52,10 +52,10 @@
             <type>jar</type>
         </dependency>
     </dependencies>
-    
+
     <build>
         <!-- Override final name for jfx:native command to create a friendly-named package -->
-	<finalName>SIRS2</finalName>
+        <finalName>SIRS2</finalName>
         <plugins>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -65,7 +65,7 @@
                     <debug>true</debug>
                 </configuration>
             </plugin>
-            
+
             <plugin>
                 <groupId>com.zenjava</groupId>
                 <artifactId>javafx-maven-plugin</artifactId>
@@ -73,31 +73,35 @@
                     <additionalAppResources>
                         ${additional.resources}
                     </additionalAppResources>
+                    <!-- To activate back to allow the user to choose the install directory -->
+<!--                    <bundleArguments>
+                        <installdirChooser>true</installdirChooser>
+                    </bundleArguments>-->
                     <nativeReleaseVersion>${project.version}</nativeReleaseVersion>
                     <mainClass>fr.sirs.launcher.Launcher</mainClass>
                     <needMenu>true</needMenu>
                     <jvmArgs>
-                        <!-- 
+                        <!--
                         Force GC. After multiple tests, it appears that serial
-                        GC uses less native memory (< 2MB) than Parallel (~ 25MB) 
-                        and G1 (> 60MB !). Moreover, even if the GC activity is a 
-                        little more intrusive with the serial one, it keeps the 
-                        heap lighter over time. 
+                        GC uses less native memory (< 2MB) than Parallel (~ 25MB)
+                        and G1 (> 60MB !). Moreover, even if the GC activity is a
+                        little more intrusive with the serial one, it keeps the
+                        heap lighter over time.
                         -->
                         <jvmArg>-XX:+UseSerialGC</jvmArg>
-                        <!-- 
+                        <!--
                         Force to keep a tiny youg generation. It allows GC to clean
                         memory more often but with less "Stop the world" steps.
-                        --> 
+                        -->
                         <jvmArg>-XX:NewRatio=4</jvmArg>
-                        <!-- Memory management. Application cannot run with less 
+                        <!-- Memory management. Application cannot run with less
                         than 256MB heap, so we forbid its use when this requirement
-                        cannot be fulfilled. Another important point is that multiple 
+                        cannot be fulfilled. Another important point is that multiple
                         end users work on Win7-32bits system, so they need memory saving.
-                        As application performance is not affected when running with 
+                        As application performance is not affected when running with
                         512MB, we define it as maximal heap amount. -->
                         <jvmArg>-Xms256m</jvmArg>
-                        <jvmArg>-Xmx512m</jvmArg>
+                        <jvmArg>-Xmx1024m</jvmArg>
                         <!-- We de-activate JIT compilation to reduce code cache / class space. -->
                         <jvmArg>-XX:-TieredCompilation</jvmArg>
                         <jvmArg>-Xmixed</jvmArg>
@@ -107,8 +111,8 @@
                         <jvmArg>-XX:+AggressiveOpts</jvmArg>
                         <!-- Reduce thread space. This is important, as ES is popping a real swarm of threads. -->
                         <jvmArg>-Xss256k</jvmArg>
-                        <!-- We delegate proxy detection to Java (Note : Use of Proxy-vole 
-                        library should make this parameter obsolete, but we keep it active, 
+                        <!-- We delegate proxy detection to Java (Note : Use of Proxy-vole
+                        library should make this parameter obsolete, but we keep it active,
                         in case proxy-vole is not sufficient). -->
                         <jvmArg>-Djava.net.useSystemProxies=true</jvmArg>
                         <!-- We define a custom system class loader which will scan and load available modules. -->
@@ -116,7 +120,7 @@
                         <!-- Force encoding to ensure IO with CouchDB won't encounter any deformation, whatever the OS. -->
                         <jvmArg>-Dfile.encoding=UTF-8</jvmArg>
                     </jvmArgs>
-                    <!-- TODO activate back for license agreement support before 
+                    <!-- TODO activate back for license agreement support before
                     installation. Deactivated because it does not work well for .deb packages.
                     <bundleArguments>
                         <copyright>Copyright (C) 2016, France digues</copyright>
@@ -126,5 +130,5 @@
             </plugin>
         </plugins>
     </build>
-    
+
 </project>

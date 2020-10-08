@@ -1,40 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.*?>
-<?import javafx.scene.control.*?>
-<?import java.lang.*?>
-<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.VBox?>
 
-<fx:root hgap="10.0" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="-Infinity" minWidth="-Infinity" type="GridPane" vgap="2.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1">
-  <columnConstraints>
-    <ColumnConstraints hgrow="ALWAYS" maxWidth="1.7976931348623157E308" prefWidth="400.0" />
-  </columnConstraints>
-  <rowConstraints>
-      <RowConstraints vgrow="NEVER" />
-    <RowConstraints vgrow="NEVER" />
-      <RowConstraints vgrow="NEVER" />
-    <RowConstraints vgrow="NEVER" />
-      <RowConstraints vgrow="NEVER" />
-    <RowConstraints vgrow="NEVER" />
-  </rowConstraints>
+
+<fx:root spacing="2.5" type="VBox" xmlns="http://javafx.com/javafx/8.0.171" xmlns:fx="http://javafx.com/fxml/1">
    <children>
       <Label text="Libellé :" />
-      <Label text="Description :" GridPane.rowIndex="2" GridPane.valignment="TOP">
-         <padding>
-            <Insets top="5.0" />
-         </padding></Label>
-      <Label text="Requête SQL :" GridPane.rowIndex="4" GridPane.valignment="TOP">
+      <TextField fx:id="uiLibelle" maxWidth="1.7976931348623157E308" />
+      <Label text="Description :">
          <padding>
             <Insets top="5.0" />
          </padding>
-         <GridPane.margin>
-            <Insets />
-         </GridPane.margin></Label>
-      <TextField fx:id="uiLibelle" maxWidth="1.7976931348623157E308" GridPane.rowIndex="1" />
-      <TextArea fx:id="uiDesc" maxWidth="1.7976931348623157E308" prefHeight="70.0" GridPane.rowIndex="3" />
-      <TextArea fx:id="uiSql" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" prefHeight="70.0" GridPane.rowIndex="5" />
+      </Label>
+      <TextArea fx:id="uiDesc" maxWidth="1.7976931348623157E308" />
+      <Label text="Requête SQL :">
+         <padding>
+            <Insets top="5.0" />
+         </padding>
+      </Label>
+      <TextArea fx:id="uiSql" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" VBox.vgrow="SOMETIMES" />
    </children>
    <padding>
-      <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
+      <Insets bottom="2.5" left="2.5" right="2.5" />
    </padding>
 </fx:root>

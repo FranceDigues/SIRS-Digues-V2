@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TitledPane?>
+<?import javafx.scene.control.Hyperlink?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<fx:root stylesheets="@../MobilePluginStyle.css" type="StackPane" xmlns="http://javafx.com/javafx/8.0.171" xmlns:fx="http://javafx.com/fxml/1">
+   <children>
+      <BorderPane fx:id="uiConfigPane" minHeight="10.0" minWidth="10.0">
+         <center>
+            <TitledPane maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="0.0" minWidth="0.0" prefHeight="361.0" prefWidth="481.0" styleClass="header" text="Choisir les répertoires de destination" BorderPane.alignment="CENTER">
+               <padding>
+                  <Insets bottom="5.0" left="5.0" right="5.0" top="5.0" />
+               </padding>
+               <content>
+                  <VBox prefHeight="250.0" prefWidth="467.0">
+                     <children>
+                        <Hyperlink prefHeight="16.0" minWidth="250" prefWidth="300" text="Tronçon -&gt; chemin associé (aide)" onAction="#printHelp"/>
+                        <ListView fx:id="uiTronconList" maxHeight="1.7976931348623157E308" maxWidth="1.7976931348623157E308" minHeight="100.0" minWidth="0.0" prefHeight="200.0" />
+                        <Label prefHeight="38.0" prefWidth="345.0" text="Choix du répertoire de destination pour la sélection :">
+                           <padding>
+                              <Insets top="10.0" />
+                           </padding>
+                        </Label>
+                        <Button fx:id="uiSearchDirectory" mnemonicParsing="false" prefHeight="28.0" prefWidth="455.0" text="Parcourir..." />
+                     </children>
+                  </VBox>
+               </content>
+            </TitledPane>
+         </center>
+      </BorderPane>
+   </children>
+</fx:root>

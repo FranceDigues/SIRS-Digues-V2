@@ -37,7 +37,7 @@ public class ConvertGeomToBergeHandler extends ConvertGeomToTronconHandler {
         this.typeClass = Berge.class;
         this.typeName = "berge";
         this.maleGender = false;
-        this.parentClass = Digue.class; // should not be used
-        this.parentLabel = "à la digue"; // should not be used
+        this.parentClass = null; // should not be used
+        this.parentLabel = ""; // should not be used
     }
 }

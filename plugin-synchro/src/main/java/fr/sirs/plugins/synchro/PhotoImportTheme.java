@@ -53,8 +53,9 @@ public class PhotoImportTheme extends AbstractPluginsButtonTheme {
     public Parent createPane() {
         final BorderPane container = new BorderPane();
         container.setPadding(new Insets(20));
-        container.setPrefWidth(600);
-        container.setMaxWidth(800);
+        container.setPrefWidth(1050);
+//        container.setMaxWidth(800);
+//prefHeight="768.0" prefWidth="1024.0"
         initDatabase(container);
         return container;
     }
@@ -69,6 +70,7 @@ public class PhotoImportTheme extends AbstractPluginsButtonTheme {
         final ScrollPane scroll = new ScrollPane(new PhotoImport(plugin.getSession(), plugin.getExecutor()));
         scroll.setStyle("-fx-background-color:transparent;");
         scroll.setFitToWidth(true);
+        scroll.setFitToHeight(true);
         container.setCenter(scroll);
     }
 

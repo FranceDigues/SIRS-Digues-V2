@@ -245,6 +245,7 @@ public class AuthenticationWallet {
         public String host;
         public int port;
         public String login;
+        public boolean checked = false;
 
         @JsonSerialize(using=PasswordSerializer.class)
         @JsonDeserialize(using=PasswordDeserializer.class)
